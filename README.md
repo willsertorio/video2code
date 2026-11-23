@@ -4,6 +4,16 @@ A video rebuilt as code.
 
 `index.html` is a self-contained page that redraws a 19.7-second handheld clip of geese crossing a sunset sky. It has no dependencies and loads nothing from the network: open the file in a browser and it plays in a loop at the clip's own frame rate (29.97 fps, 591 frames).
 
+## Side-by-side player
+
+`player.html` shows the original clip next to the code version, locked to the same frame. It is also a single self-contained file and embeds a 720 x 1280 copy of the source clip for the comparison.
+
+- Play or pause: the button, or Space.
+- Step one frame: the -1 and +1 buttons, or the Left and Right arrow keys.
+- Jump ten frames: the -10 and +10 buttons, or Shift + Left / Right.
+- Scrub: drag the bar to any of the 591 frames.
+- Speed: 0.25x, 0.5x or 1x.
+
 ## How it works
 
 The original clip was measured, and the page re-films those measurements:
@@ -17,7 +27,7 @@ A WebGL shader looks at the sky map through the camera track, and a 2D canvas dr
 
 ## Notes
 
-- The sky map is real imagery derived from the source clip; it is not procedurally generated. The source video itself is not in this repository.
+- The sky map is real imagery derived from the source clip; it is not procedurally generated. `index.html` does not contain the source video; `player.html` embeds a reduced copy of it.
 - The page draws at up to 1080 px wide (the source was 2160 x 3840).
 - Add `?f=<frame>` (0-590) to the address to freeze on a single source frame.
 - Measured against the source over all 591 frames at 1080 x 1920: 43.98 dB PSNR on average (worst frame 42.28), SSIM 0.992.
