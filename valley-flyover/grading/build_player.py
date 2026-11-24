@@ -43,7 +43,7 @@ a = "  draw(f); seek.value = f;"
 assert s.count(a) == 1; s = s.replace(a, "  draw(f); setCarbon(f); seek.value = f;")
 s = s.replace('__CARBON__', base64.b64encode(open(os.path.join(D, 'carbon.html'), 'rb').read()).decode())
 i = s.index('</style>\n') + len('</style>\n'); hd, body = s[:i], s[i:]
-hd = hd.replace('<meta name="claude:viewport-fit-sides" content="cover">\n', '').replace('  html,body{height:100%}', '  html,body{height:100%}\n  [hidden]{display:none!important}')
+hd = hd.replace('  html,body{height:100%}', '  html,body{height:100%}\n  [hidden]{display:none!important}')
 doc = '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n' + hd + '</head>\n<body>\n' + body + '</body>\n</html>\n'
 assert not re.findall(r'__[A-Z0-9]+__', doc)
 open(os.path.join(D, 'player.html'), 'w').write(doc); print('player.html', len(doc), 'bytes')

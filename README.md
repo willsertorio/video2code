@@ -40,4 +40,3 @@ A WebGL shader looks at the sky map through the camera track, and a 2D canvas dr
 - The sky map is real imagery derived from the source clip; it is not procedurally generated. `human.html` does not contain the source video; `player.html` embeds a reduced copy of it.
 - The page draws at up to 1080 px wide (the source was 2160 x 3840).
 - Add `?f=<frame>` (0-590) to the address to freeze on a single source frame.
-- Measured against the source over all 591 frames at 1080 x 1920: 43.98 dB PSNR on average (worst frame 42.28), SSIM 0.992.

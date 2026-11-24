@@ -21,8 +21,6 @@ The clip is a camera flying forward through a scene where nothing else moves, so
 
 Each keyframe becomes a textured 3D surface. For every frame, WebGL draws the nearest surfaces through the recovered camera; where something in front has moved aside, the stretched part of a surface is cut away and a neighbouring keyframe shows through. One frame in six is a stored still seen from its own position; the other five are drawn from the geometry.
 
-Measured against the source over all 464 frames at 1920 x 1080: 39.5 dB PSNR on average (worst frame 37.1), SSIM 0.978, colour bias under 0.2 levels.
-
 Known differences: between keyframes, mostly in the last 5 seconds at the lower right, the outline of near trees against bright roofs shows small specks and jagged fragments, and near foliage is slightly softer than on keyframes. Frame rate on a real GPU has not been measured.
 
 ## Rubric and scores
