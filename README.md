@@ -22,7 +22,7 @@ The middle panel is `carbon.html`, the answer `google/gemini-4-carbon` (through 
 
 ## Valley Flyover
 
-`valley-flyover/` holds a second clip: a drone flight over forested hills, rebuilt as a 3D scene from 78 keyframes with recovered depth and the recovered flight path. It has its own code version, side-by-side player, rubric and Gemini 4 Carbon scores; see `valley-flyover/README.md`. It is not yet linked from the Overview.
+`valley-flyover/` holds a second clip: a drone flight over forested hills, rebuilt as a 3D scene from 78 keyframes with recovered depth and the recovered flight path. It has its own code version, side-by-side player, rubric and Gemini 4 Carbon scores; see `valley-flyover/README.md`. In the viewer it has its own page, `valley-flyover.html`, linked from the sidebar and the Overview, which shows the player and the rubric as an accordion. That page is generated from `valley-flyover/rubric_carbon.json` by `valley-flyover/grading/build_sample_page.py`.
 
 ## How Dusk Flock works
 

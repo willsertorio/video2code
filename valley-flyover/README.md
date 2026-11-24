@@ -28,6 +28,7 @@ Known differences: between keyframes, mostly in the last 5 seconds at the lower 
 
 - `rubric.json`: 40 criteria written for this clip (3 gates and 37 scored), following the framework's dimensions: Builds, Playback, Prompt adherence, Reference fidelity, Scene fidelity, Composition, Lighting, Materials, Motion, Realism, Camera path, Viewpoint consistency and Motion timing. The Orbit gate is left out. The prompt is assumed to be "transform this video into a photorealistic 3D scene".
 - `rubric_carbon.json`: the same criteria scored on the code version by `google/gemini-4-carbon` through OpenRouter: 34 pass, 5 fail, 1 unverified (the 30 fps gate).
+- `grading/build_sample_page.py`: writes the viewer page `valley-flyover.html` at the repository root from `rubric_carbon.json`; run it again after re-grading.
 - `grading/`: what the grader was sent (`reference.mp4`, `page.mp4`, six paired stills, four close-ups, `notes.txt`), the script that sent it (`grade.py`) and the raw reply.
 
 The grader could not run the page. It judged a frame-by-frame capture and stills, and took the build, playback and frame-rate facts from `notes.txt`, which also told it the known weaknesses. It was a single run.
