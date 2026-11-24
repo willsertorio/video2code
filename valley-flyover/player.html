@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Valley Flyover</title>
+<style>
+  /* layout: two frames filling the space above one transport bar; side by side when wide, stacked when tall */
+  :root{
+    --bg:#0b0f14; --panel:#131a22; --line:#243140; --fg:#e6edf3; --muted:#8b9bab; --accent:#f0b48a;
+    --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color-scheme:dark;
+  }
+  html,body{height:100%}
+  [hidden]{display:none!important}
+  body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.4 var(--font);display:flex;flex-direction:column;
+    padding-block:12px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+    box-sizing:border-box;overflow:hidden}
+  #views{flex:1;min-height:0;display:flex;justify-content:center;align-items:center;gap:12px}
+  figure{margin:0;display:flex;flex-direction:column;gap:6px;min-width:0}
+  figcaption{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;gap:8px;white-space:nowrap}
+  figcaption b{color:var(--fg);font-weight:600}
+  .frame{position:relative;background:var(--panel);border-radius:6px;overflow:hidden}
+  .frame video,.frame canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .frame .note{position:absolute;inset:0;display:grid;place-items:center;padding:16px;text-align:center;color:var(--muted);font-size:13px}
+  #bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding-top:12px}
+  #bar button,#bar select{font:inherit;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:6px;height:34px;min-width:40px;padding:0 10px;cursor:pointer}
+  #bar button:hover,#bar select:hover{border-color:var(--muted)}
+  #bar button:focus-visible,#bar select:focus-visible,#seek:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  #play{min-width:72px;background:var(--accent);border-color:var(--accent);color:#1b1208;font-weight:600}
+  #seek{flex:1 1 220px;min-width:0;accent-color:var(--accent);height:34px}
+  #readout{font:12px var(--mono);font-variant-numeric:tabular-nums;color:var(--muted);min-width:15ch;text-align:right}
+  @media (max-width:520px){ #seek{order:-1;flex-basis:100%} #readout{flex:1} figcaption span{display:none} }
+</style>
+</head>
+<body>
+<div id="views">
+  <figure><figcaption><b>Original video</b><span>recorded</span></figcaption>
+    <div class="frame"><video id="ref" muted playsinline preload="auto"></video><div class="note" id="refNote" hidden>The original video could not be loaded here. The code version still plays.</div></div></figure>
+  <figure><figcaption><b>Code version</b><span>drawn live</span></figcaption>
+    <div class="frame" id="stage"><canvas id="gl"></canvas></div></figure>
+</div>
+<div id="bar">
+  <button id="back10" title="Back 10 frames (Shift + Left)">&minus;10</button>
+  <button id="back1" title="Back 1 frame (Left)">&minus;1</button>
+  <button id="play" title="Play or pause (Space)">Pause</button>
+  <button id="fwd1" title="Forward 1 frame (Right)">+1</button>
+  <button id="fwd10" title="Forward 10 frames (Shift + Right)">+10</button>
+  <input id="seek" type="range" min="0" max="463" step="1" value="0" aria-label="Frame">
+  <select id="speed" aria-label="Playback speed"><option value="0.25">0.25&times;</option><option value="0.5">0.5&times;</option><option value="1" selected>1&times;</option></select>
+  <span id="readout">frame 0 / 463</span>
+</div>
+<script src="scene.js"></script>
+<script>
+const VIDEO_URL = "ref.mp4";
+const views = document.getElementById('views'), frames = [...document.querySelectorAll('.frame')];
+function resize() {
+  // landscape footage: stack the two frames when the window is tall, put them side by side when it is wide
+  const cap = frames[0].previousElementSibling.offsetHeight + 6, vw = views.clientWidth, vh = views.clientHeight, ar = FW / FH;
+  const sideW = Math.min((vw - 12) / 2, (vh - cap) * ar), stackW = Math.min(vw, ((vh - 12) / 2 - cap) * ar);
+  const stacked = stackW > sideW, w = Math.max(120, stacked ? stackW : sideW), h = w / ar;
+  views.style.flexDirection = stacked ? 'column' : 'row';
+  for (const f of frames) { f.style.width = w + 'px'; f.style.height = h + 'px'; }
+  setCanvasSize(w, h);
+}
+// ---- transport: the original video is the clock; the code version draws whichever source frame it shows ----
+const ref = document.getElementById('ref'), seek = document.getElementById('seek'), playBtn = document.getElementById('play');
+const readout = document.getElementById('readout'), speed = document.getElementById('speed');
+let playing = true, hasVideo = false, clock0 = 0, clockF = 0;
+const clampF = f => ((Math.round(f) % NF) + NF) % NF;
+function show(f) {
+  draw(f); seek.value = f;
+  readout.textContent = `frame ${String(f).padStart(3, '\u2007')} / ${NF - 1} \u00b7 ${(f / FPS).toFixed(2)} s`;
+}
+function goTo(f) {                       // jump both sides to one exact source frame
+  f = clampF(f);
+  if (hasVideo) ref.currentTime = (f + .5) / FPS;
+  clockF = f; clock0 = performance.now();
+  show(f);
+}
+function setPlaying(on) {
+  playing = on; playBtn.textContent = on ? 'Pause' : 'Play';
+  if (hasVideo) { if (on) ref.play().catch(() => {}); else { ref.pause(); goTo(curF); } }
+  else { clockF = curF; clock0 = performance.now(); }
+}
+function tick(now) {
+  if (playing) {
+    if (hasVideo) show(Math.min(NF - 1, Math.floor(ref.currentTime * FPS + 1e-3)));
+    else show(clampF(Math.floor(clockF + (now - clock0) / 1000 * FPS * +speed.value)));
+  }
+  requestAnimationFrame(tick);
+}
+function onVideoFrame(now, meta) {      // exact frame hand-off where the browser reports it
+  if (playing) show(Math.min(NF - 1, Math.floor(meta.mediaTime * FPS + 1e-3)));
+  ref.requestVideoFrameCallback(onVideoFrame);
+}
+playBtn.onclick = () => setPlaying(!playing);
+const step = d => { if (playing) setPlaying(false); goTo(curF + d); };
+document.getElementById('back1').onclick = () => step(-1);
+document.getElementById('fwd1').onclick = () => step(1);
+document.getElementById('back10').onclick = () => step(-10);
+document.getElementById('fwd10').onclick = () => step(10);
+seek.oninput = () => goTo(+seek.value);
+speed.onchange = () => { ref.playbackRate = +speed.value; clockF = curF; clock0 = performance.now(); };
+addEventListener('keydown', e => {
+  if (e.target === speed) return;
+  if (e.code === 'Space') { e.preventDefault(); setPlaying(!playing); }
+  else if (e.code === 'ArrowLeft') { e.preventDefault(); step(e.shiftKey ? -10 : -1); }
+  else if (e.code === 'ArrowRight') { e.preventDefault(); step(e.shiftKey ? 10 : 1); }
+});
+
+async function loadVideo() {              // the original clip sits beside this page as ref.mp4
+  ref.loop = true; ref.muted = true;
+  const attempt = url => new Promise(done => {
+    const ok = () => { clean(); done(true); }, bad = () => { clean(); done(false); };
+    const clean = () => { ref.removeEventListener('loadeddata', ok); ref.removeEventListener('error', bad); clearTimeout(timer); };
+    const timer = setTimeout(() => (ref.readyState >= 2 ? ok() : bad()), 15000);
+    ref.addEventListener('loadeddata', ok); ref.addEventListener('error', bad); ref.src = url; ref.load();
+  });
+  const sources = [async () => URL.createObjectURL(await (await fetch(VIDEO_URL)).blob()), async () => VIDEO_URL];
+  for (const get of sources) { try { if (await attempt(await get())) return true; } catch (e) { /* try the next way */ } }
+  document.getElementById('refNote').hidden = false; ref.hidden = true; return false;
+}
+Promise.all([loadVideo(), READY]).then(([videoOk]) => {
+  hasVideo = videoOk;
+  new ResizeObserver(resize).observe(views); resize();
+  const start = new URLSearchParams(location.search).get('f');
+  if (start !== null) { playing = false; playBtn.textContent = 'Play'; goTo(parseInt(start, 10) || 0); }
+  else { show(0); setPlaying(true); }
+  if (hasVideo && ref.requestVideoFrameCallback) ref.requestVideoFrameCallback(onVideoFrame);
+  requestAnimationFrame(tick);
+  document.body.dataset.ready = '1';
+});
+</script>
+</body>
+</html>

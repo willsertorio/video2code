@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Valley Flyover</title>
+<style>
+  :root{--bg:#0b0f14;color-scheme:dark}
+  html,body{margin:0;height:100%;background:var(--bg);overflow:hidden}
+  #gl{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:block}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<script src="scene.js"></script>
+<script>
+// Add ?f=<frame> to freeze on one source frame.
+function fit() {
+  let h = innerHeight, w = h * FW / FH; if (w > innerWidth) { w = innerWidth; h = w * FH / FW; }
+  glCv.style.width = w + 'px'; glCv.style.height = h + 'px'; setCanvasSize(w, h);
+}
+READY.then(() => {
+  const frozen = new URLSearchParams(location.search).get('f');
+  if (frozen !== null) curF = Math.max(0, Math.min(NF - 1, parseInt(frozen, 10) || 0));
+  addEventListener('resize', fit); fit();
+  document.body.dataset.ready = '1';
+  if (frozen !== null) return;
+  const t0 = performance.now();
+  (function loop(now) { draw(Math.floor(Math.max(0, now - t0) / 1000 * FPS) % NF); requestAnimationFrame(loop); })(t0);
+});
+</script>
+</body>
+</html>

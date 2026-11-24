@@ -20,7 +20,11 @@ The middle panel is `carbon.html`, the answer `google/gemini-4-carbon` (through 
 - Scrub: drag the bar to any of the 591 frames.
 - Speed: 0.25x, 0.5x or 1x.
 
-## How it works
+## Valley Flyover
+
+`valley-flyover/` holds a second clip: a drone flight over forested hills, rebuilt as a 3D scene from 78 keyframes with recovered depth and the recovered flight path. It has its own code version, side-by-side player, rubric and Gemini 4 Carbon scores; see `valley-flyover/README.md`. It is not yet linked from the Overview.
+
+## How Dusk Flock works
 
 The original clip was measured, and the page re-films those measurements:
 
