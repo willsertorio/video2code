@@ -12,43 +12,31 @@ esc = html.escape
 ICON_BOOK = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v14"/><path d="M16 12h2"/><path d="M16 8h2"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/><path d="M6 12h2"/><path d="M6 8h2"/></svg>'
 ICON_FILM = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 3v18"/><path d="M3 7.5h4"/><path d="M3 12h18"/><path d="M3 16.5h4"/><path d="M17 3v18"/><path d="M17 7.5h4"/><path d="M17 16.5h4"/></svg>'
 word = {True: ('Pass', 'yes'), False: ('Fail', 'no'), None: ('Unverified', 'unv')}
-VERS = [('m', 'mc', 'Carbon', 'Gemini 4 Carbon'), ('r', 'rc', 'Human', 'Human')]   # the two code versions being graded
+VERS = [('m', 'mc', "Gemini 4 Carbon's version"), ('r', 'rc', 'Human version')]   # the two code versions being graded
+G = {gid: {r['n']: r for r in data['rubric']} for gid, _, data in GRADERS}
 n = len(d['rubric'])
-# criteria where the two graders gave a different verdict on either version
-_by = [{r['n']: r for r in g[2]['rubric']} for g in GRADERS]
-DIFF = {k for k in _by[0] if any(_by[0][k][v] != _by[1][k][v] for v in ('m', 'r'))}
-
-def panel(gid, gname, data, hidden):
-    oname, other = next((g[1], {r['n']: r for r in g[2]['rubric']}) for g in GRADERS if g[0] != gid)
-    groups = []
-    for r in data['rubric']:
-        if not groups or groups[-1][0] != r['d']: groups.append((r['d'], []))
-        groups[-1][1].append(r)
-    secs = []
-    for name, rows in groups:
-        gate = any(r['n'].startswith('G') for r in rows)
-        tally = ' &middot; '.join(f'{lab} {sum(r[k] is True for r in rows)}/{len(rows)}' for k, _, lab, _ in VERS)
-        items = ''
-        for r in rows:
-            marks = ''.join(f'<span class="{word[r[k]][1]}"><i>{lab}</i> {word[r[k]][0]}</span>' for k, _, lab, _ in VERS)
-            o = other[r['n']]          # the other grader's verdict, shown in the disagreements view where it differs
-            body = ''.join(f'<div class="k">{esc(full)} &middot; <span class="{word[r[k]][1]}">{word[r[k]][0]}</span></div>'
-                           + (f'<p class="txt reply">{esc(r[kc])}</p>' if r[kc] else '')
-                           + (f'<div class="k other">{esc(oname)} said &middot; <span class="{word[o[k]][1]}">{word[o[k]][0]}</span></div><p class="txt reply other">{esc(o[kc])}</p>' if o[k] != r[k] else '')
-                           for k, kc, _, full in VERS)
-            items += (f'<details class="acc{"" if r["n"] in DIFF else " same"}"><summary><span class="n">{esc(r["n"])}</span><span class="p">{esc(r["c"])}</span>'
-                      f'<span class="t">{marks}</span></summary><div class="body">{body}</div></details>')
-        tag = '<span class="tag">Gate</span>' if gate else ''
-        secs.append(f'<details class="sec{"" if any(r["n"] in DIFF for r in rows) else " same"}"><summary><h2>{esc(name)}</h2>{tag}<span class="label">{tally}</span></summary><div class="accs">{items}</div></details>')
-    cnt = {k: (sum(r[k] is True for r in data['rubric']), sum(r[k] is False for r in data['rubric'])) for k, _, _, _ in VERS}
-    rows = ''.join(f'<tr><td>{esc(full)}</td><td class="mono yes">{cnt[k][0]}</td><td class="mono no">{cnt[k][1]}</td></tr>' for k, _, _, full in VERS)
-    table = f'<div class="tally table-wrap"><table class="rubric plain"><thead><tr><th>Version</th><th class="num">Passed</th><th class="num">Failed</th></tr></thead><tbody>{rows}</tbody></table></div>'
-    return f'<div class="grader" id="by-{gid}" role="tabpanel"{" hidden" if hidden else ""}>{table}{"".join(secs)}</div>', cnt
-
-panels = []; counts = {}
-for i, (gid, gname, data) in enumerate(GRADERS):
-    h, counts[gid] = panel(gid, gname, data, i > 0); panels.append(h)
-tabs = ''.join(f'<button type="button" role="tab" data-g="{gid}" aria-selected="{"true" if i == 0 else "false"}">{esc(gname)}</button>' for i, (gid, gname, _) in enumerate(GRADERS))
+# one table: a row per criterion, and for each version one cell per grader
+COLS = [(k, kc, gid) for k, kc, _ in VERS for gid, _, _ in GRADERS]
+passed = {(k, gid): sum(G[gid][r['n']][k] is True for r in d['rubric']) for k, _, gid in COLS}
+head1 = ''.join(f'<th colspan="{len(GRADERS)}" class="ver">{esc(name)}</th>' for _, _, name in VERS)
+head2 = ''.join(f'<th class="g{" first" if gid == GRADERS[0][0] else ""}">{esc(gname)} grade<span>{passed[(k, gid)]} of {n} passed</span></th>' for k, _, _ in VERS for gid, gname, _ in GRADERS)
+rows = []; ndiff = 0; last = None
+for r in d['rubric']:
+    if r['d'] != last:
+        last = r['d']; grp = [x for x in d['rubric'] if x['d'] == last]
+        same = all(G[GRADERS[0][0]][x['n']][k] == G[GRADERS[1][0]][x['n']][k] for x in grp for k, _, _ in VERS)
+        gate = ' <span class="tag">Gate</span>' if any(x['n'].startswith('G') for x in grp) else ''
+        rows.append(f'<tr class="grp{" same" if same else ""}"><th colspan="{2 + len(COLS)}">{esc(last)}{gate}</th></tr>')
+    differs = {k: len({G[gid][r['n']][k] for gid, _, _ in GRADERS}) > 1 for k, _, _ in VERS}
+    ndiff += any(differs.values())
+    cells = ''
+    for k, kc, gid in COLS:
+        x = G[gid][r['n']]; w = word[x[k]]
+        cells += (f'<td class="v{" first" if gid == GRADERS[0][0] else ""}{" diff" if differs[k] else ""}"><b class="{w[1]}">{w[0]}</b>'
+                  + (f'<p>{esc(x[kc])}</p>' if x[kc] else '') + '</td>')
+    rows.append(f'<tr class="{"" if any(differs.values()) else "same"}"><td class="n">{esc(r["n"])}</td><td class="crit">{esc(r["c"])}</td>{cells}</tr>')
+table = (f'<div class="table-wrap big"><table class="rubric grades"><thead><tr><th rowspan="2" class="n">#</th><th rowspan="2">Criterion</th>{head1}</tr><tr>{head2}</tr></thead>'
+         f'<tbody>{"".join(rows)}</tbody></table></div>')
 page = f'''<!doctype html>
 <html lang="en">
 <head>
@@ -62,43 +50,27 @@ page = f'''<!doctype html>
 .player iframe {{ position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }}
 .title-row .btn {{ text-decoration: none; }}
 @media (max-width: 760px) {{ .player {{ height: 620px; }} }}
-/* rubric accordion: one section per dimension, one row per criterion */
+/* rubric: one table, a row per criterion; for each version, the human grade then Gemini 4 Carbon's */
 .doc.wide > section.rub > h2 {{ margin-top: 36px; padding-top: 20px; border-top: 1px solid var(--line); }}
 .rub-head {{ display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin: 12px 0 8px; }}
-.tally {{ max-width: 420px; margin: 0 0 14px; }}
-.seg {{ display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }}
-.seg button {{ font: 500 12px/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); background: transparent; border: 0; padding: 9px 12px; cursor: pointer; }}
-.seg button + button {{ border-left: 1px solid var(--line); }}
-.seg button[aria-selected="true"] {{ background: var(--side); color: var(--ink); }}
-.seg button:focus-visible {{ outline: 2px solid var(--accent); outline-offset: -2px; }}
-.rub-head .by {{ display: flex; align-items: center; gap: 10px; font: 400 11px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); }}
-.grader[hidden] {{ display: none; }}
-.rub.only-diff .same {{ display: none; }}
-.rub .other {{ display: none; }}
-.rub.only-diff .other {{ display: block; }}
-.rub .acc .k.other {{ margin-left: 18px; }}
-.rub .acc .txt.reply.other {{ margin-left: 18px; border-left-color: #E6B450; }}
-.rub-head .right {{ display: flex; flex-wrap: wrap; gap: 8px; }}
+.rub-head .count {{ font: 400 12px/1.4 var(--mono); color: var(--ink-2); }}
 .btn[aria-pressed="true"] {{ border-color: var(--accent); color: var(--accent); }}
-.tally td.mono, .tally th.num {{ text-align: right; font-weight: 600; }}
-.yes {{ color: #4ADE80; }} .no {{ color: #F87171; }}
-.prompt {{ display: flex; gap: 14px; align-items: center; margin: 14px 0 0; padding: 12px 14px; background: var(--side); border: 1px solid var(--line); border-radius: 8px; }}
-.prompt p {{ margin: 4px 0 0; font-size: 15px; color: var(--ink); }}
-.unv {{ color: #E6B450; }}
-.rub details.sec {{ margin-top: 0; }}
-.rub details.sec:last-child {{ border-bottom: 1px solid var(--line); }}
-.rub details.sec > summary {{ padding: 14px 4px; }}
-.rub .tag {{ font: 500 10px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); border: 1px solid #3A3A3A; border-radius: 4px; padding: 4px 6px; }}
-.rub .accs {{ margin: 0 0 14px 24px; }}
-.rub .acc .p {{ white-space: normal; overflow: visible; }}
-.rub .acc[open] .p {{ color: var(--ink); }}
-.rub .acc summary {{ grid-template-columns: 3em 1fr auto; }}
-.rub .acc .t {{ display: flex; gap: 14px; font-weight: 600; text-transform: uppercase; }}
-.rub .acc .t i {{ font-style: normal; font-weight: 400; color: var(--ink-2); }}
-.rub .acc .k span {{ font-weight: 600; }}
-.rub .acc .body {{ padding-top: 0; }}
-.rub .acc .k {{ margin-top: 2px; }}
-@media (max-width: 640px) {{ .rub .accs {{ margin-left: 0; }} .rub .acc summary {{ grid-template-columns: 2.4em 1fr; }} .rub .acc .t {{ display: flex; grid-column: 2; line-height: 1.4; }} .rub details.sec > summary {{ flex-wrap: wrap; }} }}
+.yes {{ color: #4ADE80; }} .no {{ color: #F87171; }} .unv {{ color: #E6B450; }}
+table.grades {{ min-width: 1040px; table-layout: fixed; }}
+table.grades th, table.grades td {{ padding: 10px 12px; }}
+table.grades thead th {{ vertical-align: bottom; }}
+table.grades thead th.ver {{ text-align: left; color: var(--ink); border-left: 1px solid var(--line); }}
+table.grades thead th.g span {{ display: block; margin-top: 4px; letter-spacing: 0.04em; text-transform: none; }}
+table.grades thead th.g.first, table.grades td.v.first {{ border-left: 1px solid var(--line); }}
+table.grades th.n, table.grades td.n {{ width: 44px; font: 400 11px/2 var(--mono); color: var(--ink-2); }}
+table.grades td:first-child {{ width: 44px; }}
+table.grades td.crit {{ width: 24%; font-size: 14px; line-height: 1.5; }}
+table.grades td.v b {{ font: 600 11px/1.6 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }}
+table.grades td.v p {{ margin: 4px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); }}
+table.grades tr.grp th {{ text-align: left; }}
+table.grades .tag {{ font: 500 10px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); border: 1px solid #3A3A3A; border-radius: 4px; padding: 3px 5px; margin-left: 8px; }}
+.rub.only-diff tr.same {{ display: none; }}
+.rub.only-diff td.v.diff {{ background: rgba(230, 180, 80, 0.07); }}
 </style>
 </head>
 <body>
@@ -113,26 +85,20 @@ page = f'''<!doctype html>
 <div class="prompt"><div><div class="label">Prompt sent to Gemini 4 Carbon, with the video</div><p>{esc(d["prompt"])}</p></div></div>
 <section class="rub">
 <h2>Rubric</h2>
-<div class="rub-head"><div class="by"><span>Graded by</span><div class="seg" role="tablist" aria-label="Grader">{tabs}</div></div><div class="right"><button class="btn" id="diff" type="button" aria-pressed="false">Disagreements only ({len(DIFF)})</button><button class="btn" id="toggle" type="button" aria-expanded="false">Expand all</button></div></div>
-{"".join(panels)}
+<div class="rub-head"><span class="count" id="count">{n} criteria</span><button class="btn" id="diff" type="button" aria-pressed="false">Disagreements only ({ndiff})</button></div>
+{table}
 </section>
 </article></main>
 <script>
-const btn = document.getElementById('toggle'), tabs = [...document.querySelectorAll('.seg button')];
-const shown = () => document.querySelector('.grader:not([hidden])');
-const setOpen = open => {{ shown().querySelectorAll('details').forEach(el => {{ el.open = open; }}); btn.setAttribute('aria-expanded', open); btn.textContent = open ? 'Collapse all' : 'Expand all'; }};
-const diff = document.getElementById('diff'), rubEl = document.querySelector('.rub');
-diff.addEventListener('click', () => {{ const on = diff.getAttribute('aria-pressed') !== 'true'; diff.setAttribute('aria-pressed', on); rubEl.classList.toggle('only-diff', on); if (on) setOpen(true); }});
-btn.addEventListener('click', () => setOpen(btn.getAttribute('aria-expanded') !== 'true'));
-tabs.forEach(t => t.addEventListener('click', () => {{
-  const open = btn.getAttribute('aria-expanded') === 'true';
-  tabs.forEach(x => x.setAttribute('aria-selected', x === t));
-  document.querySelectorAll('.grader').forEach(g => {{ g.hidden = g.id !== 'by-' + t.dataset.g; }});
-  setOpen(open);
-}}));
+const diff = document.getElementById('diff'), rubEl = document.querySelector('.rub'), count = document.getElementById('count');
+diff.addEventListener('click', () => {{
+  const on = diff.getAttribute('aria-pressed') !== 'true';
+  diff.setAttribute('aria-pressed', on); rubEl.classList.toggle('only-diff', on);
+  count.textContent = on ? '{ndiff} of {n} criteria: the two graders disagree on the highlighted cells' : '{n} criteria';
+}});
 </script>
 </body>
 </html>
 '''
 open(os.path.join(ROOT, 'valley-flyover.html'), 'w').write(page)
-print('wrote valley-flyover.html:', n, 'criteria; pass/fail per grader', counts)
+print('wrote valley-flyover.html:', n, 'criteria,', ndiff, 'with a disagreement; passed', passed)
