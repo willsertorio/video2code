@@ -2,7 +2,11 @@
 
 A video rebuilt as code.
 
-`index.html` is a self-contained page that redraws a 19.7-second handheld clip of geese crossing a sunset sky. It has no dependencies and loads nothing from the network: open the file in a browser and it plays in a loop at the clip's own frame rate (29.97 fps, 591 frames).
+`human.html` is a self-contained page that redraws a 19.7-second handheld clip of geese crossing a sunset sky. It has no dependencies and loads nothing from the network: open the file in a browser and it plays in a loop at the clip's own frame rate (29.97 fps, 591 frames).
+
+## Viewer
+
+`index.html` is the Overview: what the comparison is and how each of the three versions was made. `sample.html` shows the side-by-side player inside the viewer. Both use `css/docs.css` and the Geist fonts in `fonts/` (licences in `licenses.csv`).
 
 ## Side-by-side player
 
@@ -29,7 +33,7 @@ A WebGL shader looks at the sky map through the camera track, and a 2D canvas dr
 
 ## Notes
 
-- The sky map is real imagery derived from the source clip; it is not procedurally generated. `index.html` does not contain the source video; `player.html` embeds a reduced copy of it.
+- The sky map is real imagery derived from the source clip; it is not procedurally generated. `human.html` does not contain the source video; `player.html` embeds a reduced copy of it.
 - The page draws at up to 1080 px wide (the source was 2160 x 3840).
 - Add `?f=<frame>` (0-590) to the address to freeze on a single source frame.
 - Measured against the source over all 591 frames at 1080 x 1920: 43.98 dB PSNR on average (worst frame 42.28), SSIM 0.992.
