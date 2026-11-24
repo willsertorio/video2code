@@ -1,0 +1,6 @@
+- How the page draws the scene: one WebGL2 fragment shader ray-marches a landscape generated from maths (noise functions for terrain, trees, fields and buildings) through a camera moved along a coded path. It uses no images, no video and no external libraries. Page size: 35 KB.
+- Capture: every third frame (155 of 464), captured at 320x180 because the page is slow to draw without a GPU; each captured frame is held for three video frames. The six stills and four close-ups were captured at 960x540. The low capture size of the motion capture is a limit of the capture, not of the page: judge fine detail from the stills and close-ups.
+- Builds: the page loaded and rendered with no page or console errors in headless Chromium (software rendering).
+- Frame rate: NOT measured on a real GPU. Under software rendering it draws well under one frame per second at 640x360.
+- Playback: the page has its own play bar over the bottom of the picture (Play/Pause, scrub bar, time, an HD/Perf resolution toggle), which fades out while playing; it was hidden for the capture. In an automated test it played on load, Pause held the time at 2.11 s for 8 s, and Play resumed from 2.11 s.
+- Length and loop: the page's clip is 18.5 s long (the video is 19.3 s); after 18.5 s it cuts straight back to the start. In the capture and stills, moments after 18.5 s show the page's last frame.

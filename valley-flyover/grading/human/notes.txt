@@ -1,0 +1,6 @@
+- How the page draws the scene: 78 still frames taken from the reference video (one every 6 frames) are each mapped onto a 3D surface built from recovered depth (a 483x273 vertex mesh per still). For every one of the 464 frames, WebGL draws the nearest of these surfaces through a camera placed at the position recovered for that frame. The other five frames in six are synthesised from this geometry. No video file is played to produce the PAGE picture. No external libraries. Page size: about 28 MB.
+- Capture: all 464 frames, captured at 1920x1080.
+- Builds: the page loaded and rendered with no page or console errors in headless Chromium (software rendering).
+- Frame rate: NOT measured on a real GPU. Under software rendering it runs at only a few frames per second.
+- Playback: the page has a transport bar under the picture (Play/Pause, frame step, scrub bar, speed). In an automated test it played on load, Pause held the picture on frame 160 for 1.5 s, and Play resumed from frame 160.
+- Length and loop: 464 frames (19.3 s); after the last frame it cuts straight back to the first frame.

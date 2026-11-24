@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Procedural Aerial Mountain Valley — WebGL2 Raymarching</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #0b1316;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    user-select: none;
+  }
+  canvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+  }
+  #hud {
+    position: fixed;
+    left: 50%;
+    bottom: 22px;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 18px;
+    border-radius: 999px;
+    background: rgba(12, 20, 18, 0.62);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: #eef4f0;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    transition: opacity 0.45s ease, transform 0.45s ease;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+    z-index: 10;
+  }
+  #hud.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-50%) translateY(8px);
+  }
+  button {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #fff;
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  button:hover {
+    background: rgba(255, 255, 255, 0.22);
+  }
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 220px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.25);
+    outline: none;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: #f5fbf7;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  }
+  #timeLabel {
+    min-width: 82px;
+    text-align: center;
+    letter-spacing: 0.03em;
+    color: rgba(240, 248, 244, 0.9);
+  }
+  #errorBox {
+    position: fixed;
+    inset: 20px;
+    padding: 20px;
+    background: rgba(30, 10, 10, 0.92);
+    color: #ffb4b4;
+    font-family: monospace;
+    white-space: pre-wrap;
+    border-radius: 8px;
+    display: none;
+    z-index: 100;
+  }
+</style>
+</head>
+<body>
+<canvas id="glcanvas"></canvas>
+
+<div id="hud">
+  <button id="playBtn">Pause</button>
+  <input id="scrubber" type="range" min="0" max="18.5" step="0.01" value="0" />
+  <span id="timeLabel">00:00 / 00:18</span>
+  <button id="qualBtn" title="Toggle Render Resolution">HD</button>
+</div>
+
+<div id="errorBox"></div>
+
+<script id="vs" type="x-shader/x-vertex">#version 300 es
+in vec2 aPos;
+void main() {
+  gl_Position = vec4(aPos, 0.0, 1.0);
+}
+</script>
+
+<script id="fs" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+
+out vec4 fragColor;
+
+uniform vec2 uResolution;
+uniform float uTime;
+
+// -------------------------------------------------------------------------
+// Hash & Analytical Derivative Noise Utilities
+// -------------------------------------------------------------------------
+float hash12(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+
+vec2 hash22(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.xx + p3.yz) * p3.zy);
+}
+
+// Returns vec3(value, d/dx, d/dy)
+vec3 noised(vec2 x) {
+  vec2 i = floor(x);
+  vec2 f = fract(x);
+  vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+  vec2 du = 30.0 * f * f * (f * (f - 2.0) + 1.0);
+
+  float a = hash12(i + vec2(0.0, 0.0));
+  float b = hash12(i + vec2(1.0, 0.0));
+  float c = hash12(i + vec2(0.0, 1.0));
+  float d = hash12(i + vec2(1.0, 1.0));
+
+  float k0 = a;
+  float k1 = b - a;
+  float k2 = c - a;
+  float k3 = a - b - c + d;
+
+  return vec3(
+    k0 + k1 * u.x + k2 * u.y + k3 * u.x * u.y,
+    du * (vec2(k1, k2) + k3 * u.yx)
+  );
+}
+
+float vnoise(vec2 x) {
+  vec2 i = floor(x);
+  vec2 f = fract(x);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  float a = hash12(i);
+  float b = hash12(i + vec2(1.0, 0.0));
+  float c = hash12(i + vec2(0.0, 1.0));
+  float d = hash12(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+const mat2 m2 = mat2(0.80, -0.60, 0.60, 0.80);
+
+float fbm4(vec2 p) {
+  float f = 0.0;
+  float a = 0.5;
+  for (int i = 0; i < 4; i++) {
+    f += a * vnoise(p);
+    p = m2 * p * 2.03;
+    a *= 0.5;
+  }
+  return f;
+}
+
+// Eroded ridge FBM for realistic East-Asian mountain ranges
+float erodedRidges(vec2 p, int octaves) {
+  float h = 0.0;
+  float amp = 0.52;
+  vec2 dsum = vec2(0.0);
+  vec2 q = p;
+  for (int i = 0; i < 8; i++) {
+    if (i >= octaves) break;
+    vec3 n = noised(q);
+    dsum += n.yz;
+    float ridge = 1.0 - abs(n.x * 2.0 - 1.0);
+    ridge = ridge * ridge;
+    h += amp * ridge / (1.0 + 0.85 * dot(dsum, dsum));
+    q = m2 * q * 2.08 + vec2(13.7, -7.3);
+    amp *= 0.50;
+  }
+  return h;
+}
+
+float sdBox2D(vec2 p, vec2 b) {
+  vec2 d = abs(p) - b;
+  return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);
+}
+
+float gauss(float x, float mu, float sigma) {
+  float t = (x - mu) / sigma;
+  return exp(-0.5 * t * t);
+}
+
+// -------------------------------------------------------------------------
+// World Layout Masks (Fields, Terraces, Roads, Forest, Farm Complex)
+// -------------------------------------------------------------------------
+// Main foreground-left plowed clearing revealed from 00:05 to 00:18
+float mainClearingMask(vec2 p) {
+  vec2 q = p - vec2(-5.5, 76.0);
+  float warp = (vnoise(p * 0.09) - 0.5) * 6.5;
+  float d = sdBox2D(q + vec2(warp * 0.7, warp * 0.5), vec2(13.5, 16.5)) - 3.5;
+  return 1.0 - smoothstep(-2.5, 2.5, d);
+}
+
+// Lower-right terraced paddies & small pond visible 00:00 to 00:07
+float frontRightTerraceMask(vec2 p) {
+  vec2 q = p - vec2(17.5, 53.0);
+  float warp = (vnoise(p * 0.12 + 4.1) - 0.5) * 4.5;
+  float d = sdBox2D(q + vec2(warp, warp * 0.6), vec2(11.5, 10.5)) - 2.5;
+  return 1.0 - smoothstep(-2.0, 2.5, d);
+}
+
+// Right valley agricultural zone & farm complex (revealed over wooded knoll 00:11-00:18)
+float valleyFarmZoneMask(vec2 p) {
+  vec2 q = p - vec2(34.0, 124.0);
+  float warp = (vnoise(p * 0.06 + 9.2) - 0.5) * 8.0;
+  float d = sdBox2D(q + vec2(warp * 0.5, warp * 0.4), vec2(25.0, 21.0)) - 5.0;
+  return 1.0 - smoothstep(-3.5, 4.5, d);
+}
+
+// Mid-right terrace fields visible in 00:00-00:12
+float rightTerraceZoneMask(vec2 p) {
+  vec2 q = p - vec2(43.0, 82.0);
+  float warp = (vnoise(p * 0.08) - 0.5) * 5.0;
+  float d = sdBox2D(q + warp, vec2(16.0, 19.0)) - 4.0;
+  return 1.0 - smoothstep(-3.0, 4.0, d);
+}
+
+// Curving sandy dirt roads
+float dirtRoadMask(vec2 p) {
+  // Road 1: curves between main brown clearing and right wooded knoll
+  float xCurve1 = 7.2 + 4.2 * sin((p.y - 52.0) * 0.075) + 0.09 * (p.y - 68.0);
+  float d1 = abs(p.x - xCurve1);
+  float m1 = (1.0 - smoothstep(0.85, 1.85, d1)) * smoothstep(38.0, 45.0, p.y) * (1.0 - smoothstep(96.0, 106.0, p.y));
+
+  // Road 2: pale rural lane on the right terraces (visible early in video)
+  float xCurve2 = 31.5 + 0.22 * (p.y - 55.0) + 2.5 * cos(p.y * 0.08);
+  float d2 = abs(p.x - xCurve2);
+  float m2 = (1.0 - smoothstep(0.8, 1.7, d2)) * smoothstep(46.0, 52.0, p.y) * (1.0 - smoothstep(115.0, 125.0, p.y));
+
+  // Road 3: straight farm grid lanes next to greenhouses
+  float d3 = abs(p.y - 115.0);
+  float m3 = (1.0 - smoothstep(0.7, 1.4, d3)) * smoothstep(14.0, 17.0, p.x) * (1.0 - smoothstep(55.0, 58.0, p.x));
+
+  return clamp(max(max(m1, m2), m3), 0.0, 1.0);
+}
+
+// -------------------------------------------------------------------------
+// Base Terrain Elevation (Smooth Hills, Terraces, Midground & Distant Peaks)
+// -------------------------------------------------------------------------
+float baseElevation(vec2 p, int octaves) {
+  float h = 13.8;
+
+  // Gentle valley floor undulation
+  h += 2.2 * (vnoise(p * 0.018) - 0.45);
+
+  // 1) Foreground-left forest ridge (camera flies right over this from 00:00 to 00:09)
+  float fgLeftRidge = gauss(p.y, 41.0, 12.5) * smoothstep(14.0, -10.0, p.x);
+  h += 3.8 * fgLeftRidge;
+
+  // Foreground far-left flank hill (stays tall on bottom-left throughout flight)
+  float leftFlank = smoothstep(-8.0, -28.0, p.x) * smoothstep(20.0, 65.0, p.y) * (1.0 - smoothstep(115.0, 155.0, p.y));
+  h += 6.2 * leftFlank;
+
+  // Back wooded hill behind the plowed clearing (center-left z ~ 112)
+  float backClearingHill = gauss(p.y, 114.0, 15.0) * gauss(p.x, -14.0, 22.0);
+  h += 6.5 * backClearingHill;
+
+  // 2) Prominent foreground-right wooded knoll (occludes farm at 00:00, reveals it by 00:12+)
+  float rightKnoll = gauss(p.x, 18.5, 10.5) * gauss(p.y, 80.0, 11.0);
+  h += 4.3 * rightKnoll;
+
+  // Smaller foreground-right tree hill at z ~ 28 (visible at 00:00-00:03)
+  float earlyRightHill = gauss(p.x, 19.0, 14.0) * gauss(p.y, 31.0, 9.5);
+  h += 4.2 * earlyRightHill;
+
+  // 3) Flatten & sculpt agricultural clearings
+  float mClear = mainClearingMask(p);
+  // Subtle natural slope across the brown plowed field + slight terrace step
+  float terraceStep = smoothstep(-1.5, 1.5, (p.x + 1.5) + 0.32 * (p.y - 76.0));
+  float clearTarget = 14.1 + 0.055 * (p.y - 60.0) - 0.04 * p.x + 0.65 * terraceStep;
+  h = mix(h, clearTarget, mClear * 0.88);
+
+  // Stepped paddies on front-right (00:03-00:07)
+  float mFrontPad = frontRightTerraceMask(p);
+  float padSteps = floor(p.y * 0.22) / 0.22;
+  float padTarget = 13.4 + 0.04 * (padSteps - 48.0);
+  h = mix(h, padTarget, mFrontPad * 0.90);
+
+  // Flatten farm complex pad in right valley (z ~ 112..142)
+  float mFarm = valleyFarmZoneMask(p);
+  h = mix(h, 13.6 + 0.015 * (p.y - 120.0), mFarm * 0.94);
+
+  // Flatten right-side terraces
+  float mRTerr = rightTerraceZoneMask(p);
+  h = mix(h, 13.8 + 0.03 * (p.y - 75.0), mRTerr * 0.85);
+
+  // 4) Midground rolling forested mountain slopes (z = 155 .. 380)
+  float midMask = smoothstep(140.0, 235.0, p.y) * (1.0 - smoothstep(370.0, 480.0, p.y));
+  if (midMask > 0.001) {
+    float midRidges = erodedRidges(p * 0.013 + vec2(2.4, 1.1), max(3, octaves - 1));
+    // Sculpt midground valley pockets & broad central-right ridge
+    float midEnvelope = 14.0
+      + 17.0 * gauss(p.x, 22.0, 85.0)
+      + 15.0 * gauss(p.x, -95.0, 60.0)
+      + 11.0 * gauss(p.x, 135.0, 75.0);
+    h += midMask * (midEnvelope * (0.42 + 0.85 * midRidges));
+  }
+
+  // Secondary intermediate ridge on left-center (z = 300 .. 470) creating layered mountain depth
+  float midBackMask = smoothstep(260.0, 360.0, p.y) * (1.0 - smoothstep(460.0, 560.0, p.y));
+  if (midBackMask > 0.001) {
+    float r = erodedRidges(p * 0.0095 + vec2(-5.2, 3.7), octaves);
+    float env = 28.0 * gauss(p.x, -125.0, 70.0) + 24.0 * gauss(p.x, 75.0, 95.0);
+    h += midBackMask * env * (0.45 + 0.85 * r);
+  }
+
+  // 5) Distant horizon mountain range (z = 430 .. 920) sculpted to match video skyline
+  float farMask = smoothstep(390.0, 540.0, p.y);
+  if (farMask > 0.001) {
+    float r = erodedRidges(p * 0.0062 + vec2(8.1, -2.4), octaves);
+    // Skyline profile across X:
+    // High misty ridge far-left -> valley dip left-center -> twin ridges -> central peak -> rolling right ridges
+    float skyProfile = 24.0
+      + 58.0 * smoothstep(-190.0, -430.0, p.x)           // High far-left ridge
+      - 12.0 * gauss(p.x, -245.0, 42.0)                  // V-valley dip on left
+      + 26.0 * gauss(p.x, -145.0, 52.0)                  // Left-center peak cluster
+      + 39.0 * gauss(p.x, -12.0, 56.0)                   // Prominent central peak
+      + 28.0 * gauss(p.x, 118.0, 65.0)                   // Right-center peak
+      + 21.0 * gauss(p.x, 255.0, 85.0)                   // Far-right rolling ridge
+      - 14.0 * smoothstep(340.0, 520.0, p.x);            // Gentle descent at far right
+
+    float depthFade = 1.0 - smoothstep(760.0, 980.0, p.y);
+    h += farMask * depthFade * skyProfile * (0.52 + 0.78 * r);
+  }
+
+  return h;
+}
+
+// -------------------------------------------------------------------------
+// Forest Canopy & Rural Structures (Greenhouses, Red Roof, Solar Panels)
+// -------------------------------------------------------------------------
+// Billowy cellular tree crowns for realistic aerial foliage
+float treeCanopyHeight(vec2 p, float detailWeight) {
+  // Macro clumpiness
+  float clumping = vnoise(p * 0.085);
+
+  // Layer 1: Individual tree crowns (~3.2m spacing)
+  vec2 q1 = p * 0.42;
+  vec2 i1 = floor(q1);
+  vec2 f1 = fract(q1);
+  float minDist = 1.5;
+  for (int y = -1; y <= 1; y++) {
+    for (int x = -1; x <= 1; x++) {
+      vec2 nb = vec2(float(x), float(y));
+      vec2 jitter = 0.18 + 0.64 * hash22(i1 + nb);
+      vec2 diff = nb + jitter - f1;
+      float d = dot(diff, diff);
+      minDist = min(minDist, d);
+    }
+  }
+  // Rounded cauliflower dome
+  float crown = sqrt(max(0.0, 1.0 - minDist * 1.15));
+
+  // Layer 2: Sub-branches & leaf clusters (faded out in the distance to prevent aliasing)
+  float sub = 0.0;
+  if (detailWeight > 0.01) {
+    float b1 = 1.0 - abs(vnoise(p * 1.45) * 2.0 - 1.0);
+    float b2 = vnoise(p * 3.8);
+    sub = detailWeight * (0.42 * b1 + 0.24 * b2);
+  }
+
+  return (1.6 + 2.3 * clumping) * crown + sub;
+}
+
+float getForestMask(vec2 p) {
+  float clearings = 0.0;
+  clearings = max(clearings, mainClearingMask(p));
+  clearings = max(clearings, frontRightTerraceMask(p));
+  clearings = max(clearings, valleyFarmZoneMask(p));
+  clearings = max(clearings, rightTerraceZoneMask(p));
+  clearings = max(clearings, dirtRoadMask(p) * 0.95);
+
+  // Grassy/bushy divider strip inside the main brown clearing (seen in 00:13-00:18)
+  float dividerDist = abs((p.x + 1.5) + 0.32 * (p.y - 76.0));
+  float dividerShrubs = (1.0 - smoothstep(0.6, 2.2, dividerDist)) * mainClearingMask(p) * 0.42;
+
+  // Sparse sunlit grassy/scrubby patches on midground mountain slopes
+  float midSlopeScrub = smoothstep(0.64, 0.78, vnoise(p * 0.055 + vec2(3.1, 7.4)))
+                      * smoothstep(155.0, 200.0, p.y) * (1.0 - smoothstep(320.0, 380.0, p.y));
+
+  float f = clamp(1.0 - clearings + dividerShrubs, 0.0, 1.0);
+  f *= (1.0 - 0.55 * midSlopeScrub);
+
+  // Small scattered tree Windbreaks on right terraces
+  float windbreak = (1.0 - smoothstep(1.2, 2.8, abs(p.y - 98.0))) * smoothstep(25.0, 32.0, p.x) * (1.0 - smoothstep(52.0, 58.0, p.x));
+  f = max(f, windbreak * 0.85);
+
+  return f;
+}
+
+// Extruded farm buildings & greenhouses in the right valley
+// matCode: 0 = none, 1 = red roof, 2 = white greenhouse/wall, 3 = solar panel roof, 4 = emerald green roof
+float buildingHeight(vec2 p, out float matCode) {
+  matCode = 0.0;
+  // Fast bounding-box reject
+  if (p.x < 11.0 || p.x > 65.0 || p.y < 112.0 || p.y > 170.0) return 0.0;
+
+  float bh = 0.0;
+
+  // 1) Prominent terracotta/orange-red pitched roof barn (back-left of farm complex)
+  vec2 qRed = p - vec2(21.0, 131.5);
+  float dRed = sdBox2D(qRed, vec2(4.8, 2.3));
+  if (dRed < 0.4) {
+    float wall = 1.0 - smoothstep(-0.05, 0.32, dRed);
+    float pitch = max(0.0, 1.0 - abs(qRed.y) / 2.3) * 0.95;
+    bh = wall * (2.2 + pitch);
+    matCode = (dRed < 0.05) ? 1.0 : 2.0;
+  }
+
+  // 2) Long dark-grey/solar-topped shed next to red barn (back-right)
+  vec2 qBackShed = p - vec2(31.8, 131.5);
+  float dBackShed = sdBox2D(qBackShed, vec2(5.2, 2.5));
+  if (dBackShed < 0.4) {
+    float wall = 1.0 - smoothstep(-0.05, 0.32, dBackShed);
+    float pitch = max(0.0, 1.0 - abs(qBackShed.y) / 2.5) * 0.8;
+    float h2 = wall * (2.0 + pitch);
+    if (h2 > bh) {
+      bh = h2;
+      matCode = (dBackShed < 0.05) ? 3.0 : 2.0;
+    }
+  }
+
+  // 3) White warehouse / greenhouse bays (front-left of farm complex)
+  vec2 qWhite = p - vec2(18.5, 125.2);
+  float dWhite = sdBox2D(qWhite, vec2(4.2, 2.4));
+  if (dWhite < 0.4) {
+    float wall = 1.0 - smoothstep(-0.05, 0.32, dWhite);
+    float h3 = wall * (1.85 + 0.45 * abs(sin(qWhite.y * 2.6)));
+    if (h3 > bh) {
+      bh = h3;
+      matCode = 2.0;
+    }
+  }
+
+  // 4) Array of angled blue solar-panel greenhouses (front-center & right, revealed clearly at 00:15-00:18)
+  vec2 qSolar = p - vec2(27.8, 121.8);
+  float dSolar = sdBox2D(qSolar, vec2(7.2, 4.4));
+  if (dSolar < 0.4) {
+    float wall = 1.0 - smoothstep(-0.05, 0.32, dSolar);
+    // Sawtooth south-facing solar panel rows
+    float rowFract = fract((qSolar.y + 4.4) * 0.72);
+    float sawtooth = mix(0.85, 0.15, rowFract);
+    float h4 = wall * (1.55 + 0.75 * sawtooth);
+    if (h4 > bh) {
+      bh = h4;
+      // Silver frame border vs dark blue solar cells
+      bool isFrame = (rowFract < 0.09 || rowFract > 0.92 || fract((qSolar.x + 7.2) * 0.8) < 0.07);
+      matCode = (dSolar < 0.04 && !isFrame) ? 3.0 : 2.0;
+    }
+  }
+
+  // 5) Small emerald-green roof rural house further back-right (visible from 00:00 to 00:13)
+  vec2 qGreen = p - vec2(46.5, 159.0);
+  float dGreen = sdBox2D(qGreen, vec2(2.8, 1.9));
+  if (dGreen < 0.4) {
+    float wall = 1.0 - smoothstep(-0.05, 0.35, dGreen);
+    float h5 = wall * 2.3;
+    if (h5 > bh) {
+      bh = h5;
+      matCode = 4.0;
+    }
+  }
+
+  return bh;
+}
+
+// Unified Terrain Height Function (LOD controlled by ray distance t)
+float mapTerrain(vec2 p, float t) {
+  int octaves = (t < 220.0) ? 6 : ((t < 520.0) ? 5 : 4);
+  float h = baseElevation(p, octaves);
+
+  // Add tree canopy height fading smoothly with distance
+  float treeFade = 1.0 - smoothstep(260.0, 620.0, t);
+  if (treeFade > 0.005) {
+    float fMask = getForestMask(p);
+    if (fMask > 0.005) {
+      float detailW = 1.0 - smoothstep(45.0, 175.0, t);
+      h += fMask * treeFade * treeCanopyHeight(p, detailW);
+    }
+  }
+
+  // Add rural farm buildings
+  if (t < 260.0) {
+    float dummyMat;
+    h += buildingHeight(p, dummyMat);
+  }
+
+  return h;
+}
+
+// High-detail terrain evaluation for normals & shading
+float mapTerrainHigh(vec2 p, float t, out float fMask, out float crownVal, out float bldMat) {
+  float h = baseElevation(p, 8);
+  fMask = getForestMask(p);
+  crownVal = 0.0;
+
+  float treeFade = 1.0 - smoothstep(320.0, 750.0, t);
+  if (fMask > 0.005 && treeFade > 0.005) {
+    float detailW = 1.0 - smoothstep(55.0, 220.0, t);
+    float rawCrown = treeCanopyHeight(p, detailW);
+    crownVal = rawCrown;
+    h += fMask * treeFade * rawCrown;
+  }
+
+  // Micro plow furrows on the main brown clearing
+  float mClear = mainClearingMask(p);
+  if (mClear > 0.02 && t < 150.0) {
+    float furrowFade = (1.0 - smoothstep(50.0, 140.0, t)) * mClear * (1.0 - fMask);
+    float furrowCoord = dot(p, vec2(0.88, -0.47)) * 7.5 + 1.2 * vnoise(p * 0.3);
+    h += furrowFade * 0.055 * sin(furrowCoord);
+  }
+
+  bldMat = 0.0;
+  if (t < 260.0) {
+    float bh = buildingHeight(p, bldMat);
+    if (bh > 0.01) {
+      h += bh;
+    }
+  }
+
+  return h;
+}
+
+vec3 calcNormal(vec3 pos, float t) {
+  float eps = clamp(0.035 + 0.0009 * t, 0.035, 0.65);
+  float fm, cv, bm;
+  float h0 = mapTerrainHigh(pos.xz, t, fm, cv, bm);
+  float hx = mapTerrainHigh(pos.xz + vec2(eps, 0.0), t, fm, cv, bm);
+  float hz = mapTerrainHigh(pos.xz + vec2(0.0, eps), t, fm, cv, bm);
+  return normalize(vec3(h0 - hx, eps, h0 - hz));
+}
+
+// Soft raymarched directional shadows (captures hill shadows & tree-line shadows on fields)
+float calcSoftShadow(vec3 ro, vec3 rd, float distToCam) {
+  if (distToCam > 480.0) return 1.0;
+  float res = 1.0;
+  float t = 0.6;
+  for (int i = 0; i < 20; i++) {
+    vec3 p = ro + rd * t;
+    float h = p.y - mapTerrain(p.xz, distToCam + t);
+    res = min(res, 7.5 * h / t);
+    if (res < 0.02 || t > 46.0) break;
+    t += clamp(h * 0.65, 0.65, 3.8);
+  }
+  float s = clamp(res, 0.0, 1.0);
+  return mix(s * s * (3.0 - 2.0 * s), 1.0, smoothstep(340.0, 480.0, distToCam));
+}
+
+// -------------------------------------------------------------------------
+// Sky & Atmospheric Scattering (Bright Warm Sun Glare Top-Left, Clear Cyan-Blue Right)
+// -------------------------------------------------------------------------
+vec3 renderSky(vec3 rd, vec3 sunDir) {
+  float sunDot = clamp(dot(rd, sunDir), 0.0, 1.0);
+  float y = max(rd.y, 0.0);
+
+  // Rich clear-day cyan-blue gradient on right, warmer pale sky toward horizon/left
+  vec3 zenithBlue  = vec3(0.16, 0.44, 0.56);
+  vec3 midSkyBlue  = vec3(0.32, 0.60, 0.70);
+  vec3 horizonHaze = vec3(0.70, 0.81, 0.80);
+
+  vec3 sky = mix(midSkyBlue, zenithBlue, pow(y, 0.65));
+  sky = mix(horizonHaze, sky, smoothstep(0.0, 0.34, y));
+
+  // Broad Mie atmospheric sun glare (upper-left warm cream wash matching the video)
+  float mieWide = pow(sunDot, 2.4);
+  float mieCore = pow(sunDot, 11.0);
+  float mieTight = pow(sunDot, 48.0);
+
+  sky += vec3(0.46, 0.45, 0.34) * mieWide;
+  sky += vec3(0.42, 0.39, 0.28) * mieCore;
+  sky += vec3(0.35, 0.32, 0.24) * mieTight;
+
+  return sky;
+}
+
+vec3 applyAerialPerspective(vec3 col, float dist, vec3 rd, vec3 sunDir) {
+  // Exponential distance haze + warm forward-scattered sun mist on left mountains
+  float fogAmount = 1.0 - exp(-dist * 0.00145);
+  float sunScatter = pow(clamp(dot(rd, sunDir), 0.0, 1.0), 3.0);
+
+  vec3 coolMountainHaze = vec3(0.24, 0.50, 0.56);
+  vec3 warmSunMist      = vec3(0.76, 0.82, 0.76);
+  vec3 hazeColor = mix(coolMountainHaze, warmSunMist, 0.18 + 0.68 * sunScatter);
+
+  // Extra soft upper-left glare veil over distant ridges
+  col = mix(col, hazeColor, fogAmount * 0.78);
+  col += vec3(0.16, 0.17, 0.13) * sunScatter * smoothstep(180.0, 650.0, dist);
+  return col;
+}
+
+// -------------------------------------------------------------------------
+// Surface Shading & Material Synthesis
+// -------------------------------------------------------------------------
+vec3 shadeTerrain(vec3 pos, float t, vec3 rd, vec3 sunDir) {
+  float fMask, crownVal, bldMat;
+  float hExact = mapTerrainHigh(pos.xz, t, fMask, crownVal, bldMat);
+  vec3 nor = calcNormal(pos, t);
+
+  // Fine micro-normal perturbation for crisp close foliage & soil grain
+  if (t < 180.0 && bldMat < 0.5) {
+    float microFade = 1.0 - smoothstep(40.0, 180.0, t);
+    vec2 g = noised(pos.xz * 6.5).yz;
+    nor = normalize(nor + vec3(g.x, 0.0, g.y) * 0.16 * microFade * (0.3 + 0.7 * fMask));
+  }
+
+  // Base Soil / Plowed Earth Albedo
+  float soilVar = fbm4(pos.xz * 0.28);
+  float furrowStripe = sin(dot(pos.xz, vec2(0.88, -0.47)) * 7.5 + 1.2 * vnoise(pos.xz * 0.3));
+  vec3 richBrownSoil = mix(vec3(0.24, 0.13, 0.055), vec3(0.38, 0.22, 0.095), soilVar);
+  richBrownSoil *= (0.91 + 0.09 * furrowStripe);
+
+  // Terraced paddies & small pond on front-right (00:02-00:07)
+  float mPad = frontRightTerraceMask(pos.xz);
+  float isPond = (1.0 - smoothstep(3.2, 4.8, length(pos.xz - vec2(22.5, 48.5)))) * mPad;
+  vec3 padSoil = mix(vec3(0.34, 0.23, 0.11), vec3(0.45, 0.32, 0.17), vnoise(pos.xz * 0.5));
+  vec3 albedo = mix(richBrownSoil, padSoil, mPad);
+
+  // Rectangular crop strips in right farm zone
+  float mFarm = valleyFarmZoneMask(pos.xz);
+  if (mFarm > 0.05 && pos.x > 36.0) {
+    float cropRow = step(0.45, fract(pos.y * 0.28));
+    vec3 greenCrop = vec3(0.14, 0.26, 0.06);
+    vec3 tilledRow = vec3(0.31, 0.20, 0.10);
+    albedo = mix(albedo, mix(tilledRow, greenCrop, cropRow), mFarm * 0.85);
+  }
+
+  // Sandy dirt tracks
+  float mRoad = dirtRoadMask(pos.xz);
+  vec3 roadCol = mix(vec3(0.48, 0.35, 0.20), vec3(0.60, 0.47, 0.30), vnoise(pos.xz * 0.8));
+  albedo = mix(albedo, roadCol, mRoad * 0.92);
+
+  // Sunlit dry grass / scrub patches on midground slopes
+  float scrubPatch = smoothstep(0.55, 0.75, vnoise(pos.xz * 0.055 + vec2(3.1, 7.4)))
+                   * smoothstep(145.0, 195.0, pos.z);
+  vec3 oliveGrass = mix(vec3(0.22, 0.27, 0.08), vec3(0.35, 0.34, 0.13), vnoise(pos.xz * 0.22));
+  albedo = mix(albedo, oliveGrass, scrubPatch * (1.0 - fMask));
+
+  // Forest Canopy Albedo & Canopy Ambient Occlusion
+  float ao = 1.0;
+  if (fMask > 0.01) {
+    float species = vnoise(pos.xz * 0.11);
+    float fineLeaf = vnoise(pos.xz * 2.4);
+    float distantTex = fbm4(pos.xz * 0.045);
+
+    vec3 deepPine     = vec3(0.032, 0.085, 0.024);
+    vec3 lushOak      = vec3(0.082, 0.175, 0.032);
+    vec3 sunlitCanopy = vec3(0.165, 0.255, 0.045);
+
+    vec3 treeCol = mix(deepPine, lushOak, smoothstep(0.25, 0.72, species));
+    treeCol = mix(treeCol, sunlitCanopy, smoothstep(0.52, 0.88, fineLeaf) * 0.65);
+
+    // Subtle olive/golden-green patches on midground & distant ridges (matching Korean mountain flora)
+    float ridgeWarmth = smoothstep(0.52, 0.80, distantTex) * smoothstep(130.0, 260.0, pos.z);
+    treeCol = mix(treeCol, vec3(0.19, 0.24, 0.065), ridgeWarmth * 0.50);
+
+    // Distant deep emerald-teal mountain forest tint
+    float farForest = smoothstep(320.0, 580.0, pos.z);
+    treeCol = mix(treeCol, vec3(0.045, 0.135, 0.065), farForest * 0.55);
+
+    albedo = mix(albedo, treeCol, fMask);
+
+    // Deep crevices between individual tree crowns create photorealistic aerial foliage contrast
+    float crownAO = mix(1.0, clamp(0.28 + 0.34 * crownVal, 0.25, 1.08), fMask * (1.0 - smoothstep(240.0, 520.0, t)));
+    ao *= crownAO;
+  }
+
+  // Rural Building Materials (Red Barn, White Greenhouses, Solar Panels, Emerald Roof)
+  float specStrength = 0.04;
+  if (bldMat > 0.5) {
+    ao = 1.0;
+    if (bldMat < 1.5) {
+      // Terracotta orange-red roof
+      albedo = vec3(0.58, 0.14, 0.075);
+      specStrength = 0.18;
+    } else if (bldMat < 2.5) {
+      // Bright white/silver greenhouse & structural walls
+      albedo = vec3(0.76, 0.79, 0.81);
+      specStrength = 0.25;
+    } else if (bldMat < 3.5) {
+      // Deep navy-blue photovoltaic solar panel arrays
+      albedo = vec3(0.055, 0.105, 0.195);
+      specStrength = 0.65;
+    } else {
+      // Bright emerald-green rural roof in mid-right valley
+      albedo = vec3(0.06, 0.38, 0.18);
+      specStrength = 0.20;
+    }
+  }
+
+  // Muddy reflective farm pond at 00:04-00:06
+  if (isPond > 0.05) {
+    nor = normalize(mix(nor, vec3(0.0, 1.0, 0.0), isPond * 0.92));
+    albedo = mix(albedo, vec3(0.16, 0.17, 0.09), isPond * 0.85);
+    specStrength = mix(specStrength, 0.55, isPond);
+  }
+
+  // Lighting: Warm Sun + Cool Sky Hemisphere + Warm Ground Bounce + Soft Shadows
+  float shadow = calcSoftShadow(pos + nor * 0.18, sunDir, t);
+  float ndotl = clamp(dot(nor, sunDir), 0.0, 1.0);
+
+  // Subsurface foliage wrap lighting (sun glowing through sunlit tree tops)
+  float foliageWrap = clamp((dot(nor, sunDir) + 0.35) / 1.35, 0.0, 1.0) * fMask;
+
+  vec3 sunColor = vec3(1.48, 1.36, 1.12);
+  vec3 skyAmb   = vec3(0.19, 0.31, 0.35) * (0.55 + 0.45 * nor.y);
+  vec3 bounce   = vec3(0.12, 0.10, 0.06) * clamp(1.0 - nor.y, 0.0, 1.0);
+
+  vec3 lin = vec3(0.0);
+  lin += sunColor * ndotl * shadow;
+  lin += vec3(0.28, 0.34, 0.12) * foliageWrap * (0.35 + 0.65 * shadow) * 0.55;
+  lin += skyAmb * ao;
+  lin += bounce * ao;
+
+  vec3 col = albedo * lin;
+
+  // Specular highlight (solar panels, greenhouse roofs, pond, waxy leaves)
+  vec3 halfVec = normalize(sunDir - rd);
+  float ndoth = clamp(dot(nor, halfVec), 0.0, 1.0);
+  float shininess = (bldMat > 2.5 && bldMat < 3.5) ? 42.0 : 18.0;
+  col += vec3(1.0, 0.97, 0.88) * pow(ndoth, shininess) * specStrength * shadow * (0.3 + 0.7 * ndotl);
+
+  // Sky reflection on angled solar panels & pond
+  if (specStrength > 0.35) {
+    vec3 reflSky = vec3(0.32, 0.54, 0.66);
+    float fres = pow(1.0 - clamp(dot(nor, -rd), 0.0, 1.0), 3.0);
+    col = mix(col, reflSky, clamp(0.18 + 0.45 * fres, 0.0, 0.55) * specStrength);
+  }
+
+  return applyAerialPerspective(col, t, rd, sunDir);
+}
+
+// -------------------------------------------------------------------------
+// ACES Filmic Tone Mapping & Aerial Drone Color Grade
+// -------------------------------------------------------------------------
+vec3 acesToneMap(vec3 x) {
+  const float a = 2.51;
+  const float b = 0.03;
+  const float c = 2.43;
+  const float d = 0.59;
+  const float e = 0.14;
+  return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+
+void main() {
+  vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution.xy) / uResolution.y;
+
+  // Normalized 0..1 progress across the 18.5-second aerial shot
+  float progress = clamp(uTime / 18.5, 0.0, 1.0);
+
+  // Smooth aerial DJI drone forward flight path
+  float camZ = mix(0.0, 56.5, progress);
+  float camY = mix(29.1, 27.1, progress) + 0.08 * sin(uTime * 0.45);
+  float camX = mix(-0.4, 0.35, progress);
+  vec3 ro = vec3(camX, camY, camZ);
+
+  // Slight natural gimbal pitch & subtle drift
+  float pitch = -0.096 - 0.006 * progress;
+  float yaw   = 0.008 * sin(uTime * 0.25);
+
+  vec3 forward = normalize(vec3(sin(yaw) * cos(pitch), sin(pitch), cos(yaw) * cos(pitch)));
+  vec3 right   = normalize(cross(vec3(0.0, 1.0, 0.0), forward));
+  vec3 up      = cross(forward, right);
+
+  // Wide-angle 24mm-equivalent aerial camera lens
+  float focalLength = 1.22;
+  vec3 rd = normalize(uv.x * right + uv.y * up + focalLength * forward);
+
+  // Sun positioned upper-left-front (matching top-left sky glare & tree shadows on fields)
+  vec3 sunDir = normalize(vec3(-0.67, 0.43, 0.60));
+
+  // Raymarch the 3D Landscape
+  float tMin = 8.0;
+  float tMax = 960.0;
+  float t = tMin;
+  bool hit = false;
+
+  // Optimization: if ray points well above highest mountain crest, skip straight to sky
+  if (rd.y < 0.24) {
+    float prevT = t;
+    float prevH = 0.0;
+    for (int i = 0; i < 145; i++) {
+      vec3 pos = ro + rd * t;
+      float terrainY = mapTerrain(pos.xz, t);
+      float h = pos.y - terrainY;
+
+      if (h < 0.0014 * t) {
+        // Binary search refinement for razor-sharp ridges, tree crowns & building roofs
+        float a = prevT;
+        float b = t;
+        for (int j = 0; j < 5; j++) {
+          float mid = 0.5 * (a + b);
+          vec3 mp = ro + rd * mid;
+          if (mp.y - mapTerrain(mp.xz, mid) < 0.0) {
+            b = mid;
+          } else {
+            a = mid;
+          }
+        }
+        t = 0.5 * (a + b);
+        hit = true;
+        break;
+      }
+
+      prevT = t;
+      prevH = h;
+
+      float stepFactor = (t < 150.0) ? 0.46 : 0.56;
+      t += max(0.09 + 0.0018 * t, h * stepFactor);
+      if (t > tMax) break;
+    }
+  }
+
+  vec3 col;
+  if (hit) {
+    vec3 hitPos = ro + rd * t;
+    col = shadeTerrain(hitPos, t, rd, sunDir);
+  } else {
+    col = renderSky(rd, sunDir);
+  }
+
+  // Subtle warm sun-veil bloom across upper-left lens quadrant
+  float lensGlare = clamp(1.0 - length(uv - vec2(-0.52, 0.36)) * 0.92, 0.0, 1.0);
+  col += vec3(0.09, 0.085, 0.055) * lensGlare * lensGlare;
+
+  // Cinematic drone color grading & filmic tone mapping
+  col *= 1.12;
+  col = acesToneMap(col);
+
+  // Gamma correction
+  col = pow(col, vec3(1.0 / 2.2));
+
+  // Fine warm/rich contrast grade matching the video's warm greens & sunny sky
+  col = mix(col, smoothstep(0.0, 1.0, col), 0.14);
+  col.r = pow(col.r, 0.97);
+  col.b = pow(col.b, 1.02);
+
+  // Subtle optical vignette & sensor micro-grain
+  float vig = 1.0 - 0.14 * dot(uv, uv);
+  col *= vig;
+  float grain = (hash12(gl_FragCoord.xy + fract(uTime) * 100.0) - 0.5) * 0.012;
+  col = clamp(col + grain, 0.0, 1.0);
+
+  fragColor = vec4(col, 1.0);
+}
+</script>
+
+<script>
+(() => {
+  const canvas = document.getElementById('glcanvas');
+  const errorBox = document.getElementById('errorBox');
+  const hud = document.getElementById('hud');
+  const playBtn = document.getElementById('playBtn');
+  const scrubber = document.getElementById('scrubber');
+  const timeLabel = document.getElementById('timeLabel');
+  const qualBtn = document.getElementById('qualBtn');
+
+  const gl = canvas.getContext('webgl2', { antialias: false, depth: false, stencil: false });
+  if (!gl) {
+    errorBox.style.display = 'block';
+    errorBox.textContent = 'WebGL 2 is required to view this procedural 3D shader.';
+    return;
+  }
+
+  function compileShader(type, src) {
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+      const info = gl.getShaderInfoLog(sh);
+      gl.deleteShader(sh);
+      throw new Error(info);
+    }
+    return sh;
+  }
+
+  let program;
+  try {
+    const vs = compileShader(gl.VERTEX_SHADER, document.getElementById('vs').textContent);
+    const fs = compileShader(gl.FRAGMENT_SHADER, document.getElementById('fs').textContent);
+    program = gl.createProgram();
+    gl.attachShader(program, vs);
+    gl.attachShader(program, fs);
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      throw new Error(gl.getProgramInfoLog(program));
+    }
+  } catch (err) {
+    errorBox.style.display = 'block';
+    errorBox.textContent = 'Shader compilation error:\n' + err.message;
+    return;
+  }
+
+  // Fullscreen triangle
+  const vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+    -1, -1,
+     3, -1,
+    -1,  3
+  ]), gl.STATIC_DRAW);
+  const aPos = gl.getAttribLocation(program, 'aPos');
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+  const uResolution = gl.getUniformLocation(program, 'uResolution');
+  const uTime = gl.getUniformLocation(program, 'uTime');
+
+  const DURATION = 18.5;
+  let currentTime = 0.0;
+  let isPlaying = true;
+  let isDragging = false;
+  let highRes = true;
+  let lastFrameMs = performance.now();
+
+  function resize() {
+    const maxDpr = highRes ? Math.min(window.devicePixelRatio || 1, 1.65) : 0.85;
+    const w = Math.max(1, Math.floor(window.innerWidth * maxDpr));
+    const h = Math.max(1, Math.floor(window.innerHeight * maxDpr));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+      gl.viewport(0, 0, w, h);
+    }
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  function formatTime(sec) {
+    const s = Math.min(18, Math.floor(sec));
+    return '00:' + String(s).padStart(2, '0');
+  }
+
+  playBtn.addEventListener('click', () => {
+    isPlaying = !isPlaying;
+    playBtn.textContent = isPlaying ? 'Pause' : 'Play';
+  });
+
+  scrubber.addEventListener('input', () => {
+    isDragging = true;
+    currentTime = parseFloat(scrubber.value);
+    timeLabel.textContent = `${formatTime(currentTime)} / 00:18`;
+  });
+  scrubber.addEventListener('change', () => {
+    isDragging = false;
+  });
+
+  qualBtn.addEventListener('click', () => {
+    highRes = !highRes;
+    qualBtn.textContent = highRes ? 'HD' : 'Perf';
+    resize();
+  });
+
+  // Auto-hide HUD after inactivity
+  let hudTimer = null;
+  function showHud() {
+    hud.classList.remove('hidden');
+    clearTimeout(hudTimer);
+    hudTimer = setTimeout(() => {
+      if (isPlaying && !isDragging) hud.classList.add('hidden');
+    }, 2800);
+  }
+  window.addEventListener('mousemove', showHud);
+  window.addEventListener('touchstart', showHud);
+  showHud();
+
+  function render(nowMs) {
+    const dt = Math.min(0.1, (nowMs - lastFrameMs) * 0.001);
+    lastFrameMs = nowMs;
+
+    if (isPlaying && !isDragging) {
+      currentTime += dt;
+      if (currentTime > DURATION) currentTime = 0.0;
+      scrubber.value = currentTime.toFixed(2);
+      timeLabel.textContent = `${formatTime(currentTime)} / 00:18`;
+    }
+
+    gl.useProgram(program);
+    gl.bindVertexArray(vao);
+    gl.uniform2f(uResolution, canvas.width, canvas.height);
+    gl.uniform1f(uTime, currentTime);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    requestAnimationFrame(render);
+  }
+
+  requestAnimationFrame(render);
+})();
+</script>
+</body>
+</html>

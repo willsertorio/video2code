@@ -1,6 +1,6 @@
 {
  "scene": "Valley Flyover",
- "prompt": "transform this video into a photorealistic 3D scene",
+ "prompt": "transform this video into code, be the more realistic as you can",
  "grader": "google/gemini-4-carbon",
  "graded_at": "2026-11-24",
  "rubric": [
@@ -8,281 +8,361 @@
    "n": "G1",
    "d": "Builds",
    "c": "The HTML opens in Chrome and the scene renders, with no errors or blank screen",
+   "r": true,
+   "rc": "Technical notes confirm the page loaded and rendered in Chromium with no console or page errors.",
    "m": true,
-   "mc": "The pagecapture renders cleanly throughout, supporting the author's claim that it loads without errors in Chromium."
+   "mc": "Per the technical notes, the page loaded and rendered cleanly in Chromium with no console or page errors."
   },
   {
    "n": "G2",
    "d": "Builds",
    "c": "The scene runs at 30 fps or more on a standard laptop",
+   "r": null,
+   "rc": "Technical notes state that frame rate was only observed under software rendering and was not measured on a standard laptop GPU; a hardware-accelerated FPS test is needed.",
    "m": null,
-   "mc": "Real-time GPU performance was not measured; only slow software-rendered playback was tested, so a laptop GPU benchmark is needed."
+   "mc": "Per the technical notes, frame rate was only tested under slow software rendering, so a real GPU test on a standard laptop is needed."
   },
   {
    "n": "G3",
    "d": "Playback",
    "c": "The flyover starts playing on load; pause freezes the camera and everything in the scene; play resumes from the same frame",
+   "r": true,
+   "rc": "Technical notes confirm playback starts on load, pause freezes the scene on the current frame, and play resumes from that exact frame.",
    "m": true,
-   "mc": "This rests on the author's automated test claim, which verified play-on-load, pausing at frame 160, and resuming from the same frame."
+   "mc": "Per the technical notes, automated testing confirmed playback starts on load, pauses cleanly, and resumes from the exact paused timestamp."
   },
   {
    "n": "1",
    "d": "Prompt adherence",
-   "c": "The result is a 3D scene drawn live in the browser (geometry seen through a moving camera), not a video file or a flat image sequence played back",
+   "c": "The result is code: a page that draws the scene live in the browser from a moving viewpoint. It does not play back a video file or a flat sequence of the video's frames",
+   "r": true,
+   "rc": "Technical notes confirm WebGL renders 3D depth-recovered meshes from moving camera positions, synthesizing five out of every six frames live rather than playing a video or flat frame sequence.",
    "m": true,
-   "mc": "WebGL renders depth-displaced 3D meshes through a moving camera to synthesize intermediate frames, as evidenced by geometric parallax and mesh-edge warping in the close-ups."
+   "mc": "Per the technical notes and parallax in the capture, the scene is rendered live via a procedural WebGL2 ray-marching shader rather than video frames."
   },
   {
    "n": "2",
    "d": "Prompt adherence",
    "c": "Nothing is added that the video does not contain: no text, logos or overlays on the scene, no extra objects (birds, clouds, people, vehicles), and no interaction beyond the playback controls",
-   "m": true,
-   "mc": "The rendered view contains no added overlays or extra objects, and per the technical notes, interaction is limited to playback controls with no free camera."
+   "r": true,
+   "rc": "No text, logos, overlays, or extra objects appear in the scene across the entire capture.",
+   "m": false,
+   "mc": "Stills 1\u20133 show bright white water-like patches on the far left that do not exist in the reference video."
   },
   {
    "n": "3",
    "d": "Reference fidelity",
    "c": "Dense green broadleaf forest covers the near hills and fills the lower half of the opening view, as in the video",
-   "m": true,
-   "mc": "Dense broadleaf forest fills the lower half and near hills at 0.0s, matching the reference video."
+   "r": true,
+   "rc": "Dense broadleaf forest covers the near hills and fills the lower half of the frame at 0:00 and in Still 1.",
+   "m": false,
+   "mc": "In Still 1, large bare brown fields already cut across the middle-right instead of dense broadleaf forest filling the near hills."
   },
   {
    "n": "4",
    "d": "Reference fidelity",
    "c": "Layered mountain ridges span the full width of the background, with the same skyline profile as the video (highest ridge left of centre, lower ridges stepping down to the right)",
-   "m": true,
-   "mc": "The background mountain ridges span the full width with the exact skyline profile of the video across all stills."
+   "r": true,
+   "rc": "Layered background ridges span the full width with the exact skyline profile of the reference throughout the clip.",
+   "m": false,
+   "mc": "Across Stills 1\u20136, the background skyline lacks the video's distinct left-of-center peak and high far-left slope, showing flatter ridges split by a gap on the left."
   },
   {
    "n": "5",
    "d": "Reference fidelity",
    "c": "A brown tilled field lies in a clearing among the trees and comes to dominate the lower-middle of the view in the second half of the clip",
-   "m": true,
-   "mc": "The brown tilled field opens up among the trees and dominates the lower-middle view from 9.7s to 17.4s."
+   "r": true,
+   "rc": "The brown tilled clearing emerges among the trees and dominates the lower-middle view from 0:10 onward.",
+   "m": false,
+   "mc": "The brown field is already exposed on the right from Still 1 and overtakes almost the entire lower half by Stills 5\u20136 rather than sitting in a tree-lined clearing."
   },
   {
    "n": "6",
    "d": "Reference fidelity",
    "c": "A greenhouse complex with rows of white or silver tunnel roofs and one long red-roofed building sits at the lower right by the end of the clip",
-   "m": true,
-   "mc": "Rows of white/silver greenhouse roofs and the long red-roofed building sit at the lower right by 19.3s, matching the video."
+   "r": true,
+   "rc": "The greenhouse complex with white/silver tunnel roofs and the red-roofed building sits at the lower right from 0:15 to 0:19.",
+   "m": false,
+   "mc": "In Still 6 and Close-ups 1\u20132, only crude red, white, and blue blocks peek out behind a tall ridge, missing the rows of tunnel roofs at the lower right."
   },
   {
    "n": "7",
    "d": "Reference fidelity",
    "c": "A pale dirt track and a small dark pond are visible among the trees at the lower right in the first half of the clip",
-   "m": true,
-   "mc": "The pale dirt track and dark pond are clearly visible at the lower right around 4.8s\u20135.2s."
+   "r": true,
+   "rc": "The pale dirt track and small dark pond are clearly visible at the lower right around 0:04\u20130:06 and in Still 2.",
+   "m": false,
+   "mc": "In Still 2 and Close-up 4, the lower right shows wide beige striped flats and a broad pale band with no dark pond or narrow forest track."
   },
   {
    "n": "8",
    "d": "Reference fidelity",
    "c": "The valley on the right holds terraced, striped crop plots and scattered small farm buildings, including green-roofed ones",
-   "m": true,
-   "mc": "Terraced crop plots and scattered small buildings, including green-roofed ones, appear in the right-hand valley throughout the clip."
+   "r": true,
+   "rc": "Terraced striped crop plots and small green-roofed buildings populate the right valley across all stills.",
+   "m": false,
+   "mc": "In Stills 1\u20136 and Close-up 4, the right valley contains only flat planes and a single large cyan block rather than terraced crop plots and scattered farm buildings."
   },
   {
    "n": "9",
    "d": "Reference fidelity",
    "c": "The sky is clear and cloudless: a bright, almost white haze at the upper left grading to teal blue at the right",
-   "m": true,
-   "mc": "The cloudless sky grades smoothly from bright white haze at the upper left to teal blue at the right."
+   "r": true,
+   "rc": "The cloudless sky grades smoothly from bright pale haze at the upper left to teal blue on the right.",
+   "m": false,
+   "mc": "Across all stills, the sky is a washed-out pale grey-white with almost none of the reference's saturated teal-blue gradient on the right."
   },
   {
    "n": "10",
    "d": "Reference fidelity",
    "c": "Colours and time of day match the video: strong daytime sun, warm saturated greens in the foreground, cooler blue-green in the distance",
-   "m": true,
-   "mc": "Daytime lighting, warm foreground greens, and cooler distant tones closely match the reference video."
+   "r": true,
+   "rc": "Daytime sunlight, warm foreground greens, and cooler distant blue-greens match the video across all frames.",
+   "m": false,
+   "mc": "Stills 1\u20136 look desaturated and hazy with pale yellow-greens, missing the video's rich foreground greens and cool blue-green distance."
   },
   {
    "n": "11",
    "d": "Scene fidelity",
    "c": "Without the prompt, the scene is recognisable as an aerial view over forested hills with farmland in a valley",
-   "m": true,
-   "mc": "The scene immediately reads as an aerial flyover of forested hills and valley farmland."
+   "r": true,
+   "rc": "The scene immediately reads as an aerial flyover of forested hills and valley farmland.",
+   "m": false,
+   "mc": "Sheer extruded cliff walls and giant corrugated stripes in Stills 3\u20136 make the scene read as an abstract heightmap rather than natural hills and valley farmland."
   },
   {
    "n": "12",
    "d": "Scene fidelity",
    "c": "The hills have real relief: rounded slopes, folds and valleys with depth, not a flat backdrop or a single plane",
-   "m": true,
-   "mc": "Slopes and valleys show convincing 3D relief and parallax during the flyover rather than reading as a flat plane."
+   "r": true,
+   "rc": "The hills display rounded slopes, valleys, and 3D parallax during the flyover rather than acting as a flat plane.",
+   "m": false,
+   "mc": "While 3D depth is present, midground hills form unnatural vertical walls in Stills 3\u20136 rather than rounded slopes and folds."
   },
   {
    "n": "13",
    "d": "Scene fidelity",
    "c": "The forest canopy reads as individual tree crowns of varied size and height, not a smooth carpet or uniform blobs",
-   "m": true,
-   "mc": "Individual tree crowns of varied height and size are clearly defined in the 10.4s canopy close-up and throughout the clip."
+   "r": true,
+   "rc": "The canopy resolves into varied individual tree crowns throughout the foreground and middle ground.",
+   "m": false,
+   "mc": "In Stills 1\u20133 and Close-ups 3\u20134, the canopy looks like uniform spiky green cones rather than varied broadleaf tree crowns."
   },
   {
    "n": "14",
    "d": "Scene fidelity",
    "c": "Buildings and greenhouses keep their shape: straight edges, evenly spaced parallel roof rows, no bent, broken or merged lines",
+   "r": false,
+   "rc": "In Close-ups 1 and 2, several greenhouse roof lines slightly bend and smear where foreground tree depth meshes overlap them.",
    "m": false,
-   "mc": "In the 19.1s close-up, the parallel white greenhouse roof ridges on the left warp into noticeably wavy, bent lines on the coarse depth mesh."
+   "mc": "Close-ups 1\u20132 replace the parallel greenhouse rows with a few plain solid blocks mostly occluded by a steep green wall."
   },
   {
    "n": "15",
    "d": "Composition",
    "c": "The opening view matches the video's first frame: horizon about a third of the way down, sky above, ridges across the middle, forest below",
-   "m": true,
-   "mc": "The 0.0s frame matches the video's composition with the horizon a third of the way down, ridges mid-frame, and forest below."
+   "r": true,
+   "rc": "Still 1 matches the video's opening composition with the horizon a third down, ridges mid-frame, and forest below.",
+   "m": false,
+   "mc": "Still 1 breaks the opening composition with large exposed brown flats on the right and bright white patches along the left hills."
   },
   {
    "n": "16",
    "d": "Composition",
    "c": "The horizon stays level for the whole clip",
+   "r": true,
+   "rc": "The horizon remains level from start to finish.",
    "m": true,
-   "mc": "The horizon remains level throughout the entire 19.3s capture."
+   "mc": "The horizon remains level across the entire clip from 00:00 to 00:18."
   },
   {
    "n": "17",
    "d": "Lighting",
    "c": "Light comes from the upper left as in the video: the sky is brightest there and tree crowns are lit on that side with shade on the other",
+   "r": true,
+   "rc": "Directional light from the upper left matches the video's bright sky gradient and sunlit tree crowns.",
    "m": true,
-   "mc": "Sunlight comes consistently from the upper left, matching the bright sky gradient and directional shading on the tree crowns."
+   "mc": "Stills 1\u20133 show a brighter upper-left sky and directional shading on the terrain bumps lit from the upper left."
   },
   {
    "n": "18",
    "d": "Lighting",
    "c": "Distant ridges are paler and bluer than the near hills (atmospheric haze)",
-   "m": true,
-   "mc": "Distant mountain ridges show the same pale blue atmospheric haze as the reference video."
+   "r": true,
+   "rc": "Distant mountain ridges appear paler and bluer than the near hills, matching the video's atmospheric haze.",
+   "m": false,
+   "mc": "In Stills 1\u20136, distant ridges fade toward pale grey-green rather than shifting bluer than the foreground hills."
   },
   {
    "n": "19",
    "d": "Lighting",
    "c": "Exposure looks natural: forest shadows are dark but keep detail, and no large area is crushed to black or blown out to flat white beyond what the video shows",
-   "m": true,
-   "mc": "Exposure is balanced across the clip, preserving dark canopy detail at 10.4s without unnatural crushing or clipping."
+   "r": true,
+   "rc": "Exposure stays balanced with preserved shadow detail in the trees and no unnatural clipping.",
+   "m": false,
+   "mc": "Midground valleys in Stills 3\u20136 are washed out by milky haze instead of retaining dark, detailed forest shadows."
   },
   {
    "n": "20",
    "d": "Lighting",
    "c": "Trees cast shadows where the video shows them, for example along the near edge of the tilled field",
-   "m": true,
-   "mc": "Tree shadows along the edge of the tilled field at 9.7s\u201314.5s match the video."
+   "r": true,
+   "rc": "Cast tree shadows along the near edge of the tilled field and dirt track match the reference in Stills 3 and 4.",
+   "m": false,
+   "mc": "Close-up 3 shows smooth height transitions and wide stripe shading with no crisp shadows cast by trees onto the field edge."
   },
   {
    "n": "21",
    "d": "Materials",
    "c": "Foliage reads as leaves: matte, mottled light and dark greens, not flat colour or plastic",
-   "m": true,
-   "mc": "The forest canopy retains mottled, matte leaf detail rather than looking flat or plastic."
+   "r": true,
+   "rc": "Tree crowns show matte, mottled light and dark green leaf detail rather than flat or plastic shading.",
+   "m": false,
+   "mc": "In Close-ups 1\u20134, foliage appears as smooth shaded heightfield cones and stretched green gradients rather than matte mottled leaves."
   },
   {
    "n": "22",
    "d": "Materials",
    "c": "The tilled field reads as bare furrowed soil, with fine plough lines visible",
-   "m": true,
-   "mc": "Fine plough lines and bare soil texture are clearly visible across the tilled field at 14.5s and 17.4s."
+   "r": true,
+   "rc": "Close-up 3 and Still 4 show clear plough lines and bare soil texture across the tilled field.",
+   "m": false,
+   "mc": "Close-ups 1\u20133 depict the field with oversized, smooth wave ridges rather than fine plough furrows in bare soil."
   },
   {
    "n": "23",
    "d": "Materials",
    "c": "Greenhouse roofs read as bright sheeting or plastic film, clearly brighter than their surroundings, and the red roof reads as a matte painted roof",
-   "m": true,
-   "mc": "The greenhouse tunnels read as bright plastic sheeting and the adjacent red building reads as a matte painted roof at 19.1s."
+   "r": true,
+   "rc": "Close-ups 1 and 2 show bright reflective greenhouse sheeting alongside a distinct matte red roof.",
+   "m": false,
+   "mc": "In Close-ups 1\u20132, the structures read as flat untextured white and red boxes rather than bright plastic sheeting and painted roofing."
   },
   {
    "n": "24",
    "d": "Motion",
    "c": "Nothing in the scene moves by itself that does not in the video: no invented swaying trees, drifting clouds or animated water",
+   "r": true,
+   "rc": "Scene elements remain static relative to the ground with no invented foliage, water, or cloud animation.",
    "m": true,
-   "mc": "Scene elements remain static with no invented foliage sway, cloud drift, or water animation."
+   "mc": "Nothing in the environment animates on its own during the capture."
   },
   {
    "n": "25",
    "d": "Motion",
    "c": "When the clip ends it restarts cleanly from the first frame, with a single cut and no blank, black or half-drawn frame",
+   "r": true,
+   "rc": "Technical notes confirm that after frame 464 the playback cuts cleanly back to the first frame.",
    "m": true,
-   "mc": "Based on the author's technical notes, playback cuts directly from the final frame back to the first frame cleanly."
+   "mc": "Per the technical notes, the procedural shader clip cuts cleanly back to the first frame at 18.5 s without blank frames."
   },
   {
    "n": "26",
    "d": "Realism",
    "c": "No repeating texture tiles and no identical cloned trees are visible in the forest or fields",
+   "r": true,
+   "rc": "Projected photographic imagery shows natural variation with no repeating tiles or cloned tree meshes.",
    "m": true,
-   "mc": "No repeating texture tiles or cloned trees appear anywhere in the forest or fields."
+   "mc": "Procedural noise varies the canopy bumps across Stills 1\u20136 without image texture tiling or identical cloned tree meshes."
   },
   {
    "n": "27",
    "d": "Realism",
    "c": "No clipping, floating pieces, stretched or smeared surfaces, including where tree outlines cross fields, roads and roofs",
+   "r": false,
+   "rc": "Stretched and smeared surfaces appear along depth discontinuities where tree outlines cross the greenhouses, tilled soil, and pond in Close-ups 1, 3, and 4.",
    "m": false,
-   "mc": "At 17.4s (2x close-up), the tree canopy outline crossing the bright greenhouse roofs exhibits jagged tearing, smeared surfaces, and detached specks."
+   "mc": "Close-ups 1\u20134 exhibit severe vertical surface stretching along every tree-to-field drop-off and dashed ray-marching seam lines on flat ground."
   },
   {
    "n": "28",
    "d": "Realism",
    "c": "A paused frame could pass for a frame of the video at first glance",
-   "m": true,
-   "mc": "At normal viewing scale across the side-by-side stills, a paused frame easily passes for the reference video at first glance."
+   "r": true,
+   "rc": "Side-by-side stills show that a paused frame easily passes for a video frame at first glance.",
+   "m": false,
+   "mc": "Stills 1\u20136 immediately read as low-detail procedural heightmap renders and could not pass for video frames."
   },
   {
    "n": "29",
    "d": "Camera path",
    "c": "The camera flies straight forward over the forest toward the valley at a steady height, without turning, tilting or rolling",
+   "r": true,
+   "rc": "The camera flies straight forward at a steady altitude and angle without unwanted turning or rolling.",
    "m": true,
-   "mc": "The camera flies straight forward at a steady altitude with no unwanted turning, tilting, or roll."
+   "mc": "The camera translates straight forward at a steady pitch and roll throughout the 00:00\u201300:18 capture."
   },
   {
    "n": "30",
    "d": "Camera path",
    "c": "The move takes about 19 seconds at an even speed, with no sudden speed changes, stutter or shake that the video does not have",
+   "r": true,
+   "rc": "Technical notes and the capture show a smooth 19.3-second advance with even speed.",
    "m": true,
-   "mc": "In the 24 fps capture, the camera advances smoothly at an even pace over 19.3s, though real-time smoothness on a GPU remains unverified."
+   "mc": "Per the technical notes and stepped capture, the camera advances smoothly at a constant rate over an 18.5 s duration."
   },
   {
    "n": "31",
    "d": "Camera path",
    "c": "The final view matches the video's last frame: greenhouse complex at the lower right, a corner of the tilled field at the bottom left, ridges unchanged across the background",
-   "m": true,
-   "mc": "The 19.3s final frame matches the video, placing the greenhouses lower right, the field corner lower left, and the ridges across the back."
+   "r": true,
+   "rc": "Still 6 matches the final video frame with the greenhouses lower right, tilled field bottom left, and unchanged background ridges.",
+   "m": false,
+   "mc": "In Still 6, corrugated brown ground fills most of the foreground while a tall green wall blocks the lower right where the greenhouse complex belongs."
   },
   {
    "n": "32",
    "d": "Viewpoint consistency",
    "c": "Ground revealed as the camera advances (the field behind the trees, the greenhouses behind the tree line) appears complete, with no holes, blank areas or stretched fill",
+   "r": false,
+   "rc": "Between the 6-frame mesh updates, newly revealed ground behind foreground tree lines exhibits stretched rubber-sheet fill at occlusion edges.",
    "m": false,
-   "mc": "Between stored keyframes, newly disoccluded strips behind foreground trees show stretched mesh fill, visible where roofs emerge behind the canopy in the 17.4s close-up."
+   "mc": "Newly revealed terrain in Stills 3\u20136 suffers from heavily stretched vertical walls and dashed ray-marching artifacts."
   },
   {
    "n": "33",
    "d": "Viewpoint consistency",
    "c": "Nothing pops: objects do not jump, flicker, change shape or pulse in sharpness from frame to frame",
+   "r": false,
+   "rc": "Stepping between the 78 discrete depth meshes every six frames produces subtle periodic popping and edge shifting along near treetops in the capture.",
    "m": false,
-   "mc": "Switching depth meshes every six frames produces a subtle 4 Hz sharpness pulse in near foliage and slight popping along foreground occlusion edges in the capture."
+   "mc": "From 00:04 to 00:11 in the capture and Close-ups 3\u20134, horizontal dashed artifact lines shimmer and shift across the lower-right ground."
   },
   {
    "n": "34",
    "d": "Viewpoint consistency",
    "c": "The frame is complete to its edges for the whole clip: no unfinished borders, gaps or smeared edge pixels",
-   "m": false,
-   "mc": "In the 5.2s bottom-right close-up, smeared/clamped border pixels appear along the bottom edge where the synthesized camera sits slightly behind a later keyframe."
+   "r": true,
+   "rc": "The rendered image fills the frame cleanly to all borders throughout the clip.",
+   "m": true,
+   "mc": "The rendered image fills the viewport cleanly to all four edges throughout the capture."
   },
   {
    "n": "35",
    "d": "Viewpoint consistency",
    "c": "Depth behaves as in the video: near treetops sweep past quickly, middle hills move slowly and the far ridges barely move",
+   "r": true,
+   "rc": "Parallax matches the video, with near treetops sweeping past rapidly while mid-hills move slowly and far ridges stay nearly fixed.",
    "m": true,
-   "mc": "Parallax matches the video, with near treetops sweeping past rapidly while midground hills move slowly and distant ridges stay nearly fixed."
+   "mc": "Parallax in the capture separates depth properly, with near canopy passing rapidly and distant ridges barely shifting."
   },
   {
    "n": "36",
    "d": "Motion timing",
    "c": "Key reveals happen at the same moments as in the video: pond and track at the lower right by about 5 s, the tilled field opening up by about 10 s, the red-roofed building emerging from behind the trees at about 14 s, the whole greenhouse complex in view at the end",
-   "m": true,
-   "mc": "The pond and track (~5s), tilled field (~10s), red roof (~14s), and full greenhouse complex (end) all appear on schedule with the reference."
+   "r": true,
+   "rc": "The pond at 0:05, tilled field at 0:10, red roof at 0:14, and full greenhouse complex at 0:18\u20130:19 all appear on schedule.",
+   "m": false,
+   "mc": "Reveal timing does not match: no pond appears at 5 s, the field is visible from the start, and the full greenhouse complex remains hidden behind a ridge at 18 s."
   },
   {
    "n": "37",
    "d": "Motion timing",
    "c": "Paused at any moment, the page shows the same view as the video at that time, with objects in the same places in the frame",
-   "m": true,
-   "mc": "Side-by-side stills from 0.0s to 19.3s show objects aligned in the exact same frame positions as the video."
+   "r": true,
+   "rc": "All six comparison stills show scene features aligned in the exact same screen positions as the reference video.",
+   "m": false,
+   "mc": "Side-by-side Stills 1\u20136 show major mismatches in terrain layout, object scale, and feature placement at every timestamp."
   }
  ]
 }

@@ -1,8 +1,0 @@
-- How the page draws the scene: 78 still frames taken from the reference video (one every 6 frames) are each mapped onto a 3D surface built from recovered depth (a 483x273 vertex mesh per still). For every one of the 464 frames, WebGL draws the nearest of these surfaces through a camera placed at the position recovered for that frame. The other five frames in six are synthesised from this geometry. No video file is played to produce the PAGE picture. No external libraries or assets.
-- The 3D surfaces are valid only near the original flight path: there is no free camera.
-- Builds: the page loaded and rendered with no page or console errors in headless Chromium (software rendering).
-- Frame rate: NOT measured on a real GPU. Under software rendering it runs at only a few frames per second. On a laptop GPU it is expected to be far faster, but this is unverified.
-- Playback: the graded page has a transport bar under the picture (Play/Pause, frame step, scrub bar, speed) and shows the reference video beside the scene for comparison. In an automated test it played on load, Pause held both the camera and the picture on frame 160 for 1.5 s, and Play resumed from frame 160.
-- Loop: after the last frame it cuts straight back to the first frame.
-- Measured match of PAGE to VIDEO over all 464 frames at 1920x1080: PSNR 39.5 dB mean, 37.1 dB worst frame; mean colour bias under 0.2 levels; camera position within 0.03 px of the video on average.
-- Known weaknesses reported by independent reviewers: between the stored stills (most visibly in the last 5 s, lower right) the outline of near trees against bright roofs and fields shows small specks and jagged fragments; near foliage is slightly softer between stills than on them; a faint 4 Hz pulse in fine detail.

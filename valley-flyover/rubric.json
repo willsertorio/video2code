@@ -1,7 +1,7 @@
 {
  "scene": "Valley Flyover",
  "reference": "354006 (Pixabay), 19.3 s, 1920x1080, 24 fps",
- "prompt": "transform this video into a photorealistic 3D scene",
+ "prompt": "transform this video into code, be the more realistic as you can",
  "framework": "Builds [gate], Playback [gate], Prompt adherence, Reference fidelity, Scene fidelity, Composition, Lighting, Materials, Motion, Realism, Camera path, Viewpoint consistency, Motion timing (Orbit gate dropped on request)",
  "rubric": [
   {
@@ -22,7 +22,7 @@
   {
    "n": "1",
    "d": "Prompt adherence",
-   "c": "The result is a 3D scene drawn live in the browser (geometry seen through a moving camera), not a video file or a flat image sequence played back"
+   "c": "The result is code: a page that draws the scene live in the browser from a moving viewpoint. It does not play back a video file or a flat sequence of the video's frames"
   },
   {
    "n": "2",
