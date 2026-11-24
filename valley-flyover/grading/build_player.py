@@ -10,7 +10,7 @@ rep = [
 ('<title>__TITLE__</title>', '<title>Valley Flyover: original, Gemini 4 Carbon and human</title>'),
 ("  /* layout: two frames filling the space above one transport bar; side by side when wide, stacked when tall */", "  /* layout: three frames filling the space above one transport bar; side by side when wide, stacked when tall */"),
 ("  .frame video,.frame canvas{position:absolute;inset:0;width:100%;height:100%;display:block}", "  .frame iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block;background:var(--panel)}\n  .frame video,.frame canvas{position:absolute;inset:0;width:100%;height:100%;display:block}"),
-('  <figure><figcaption><b>Code version</b><span>drawn live</span></figcaption>', '  <figure><figcaption><b>Gemini 4 Carbon</b><span>one prompt</span></figcaption>\n    <div class="frame"><iframe id="carbon" title="Gemini 4 Carbon version" tabindex="-1"></iframe></div></figure>\n  <figure><figcaption><b>Human</b><span>drawn live</span></figcaption>'),
+('  <figure><figcaption><b>Code version</b></figcaption>', '  <figure><figcaption><b>Gemini 4 Carbon</b></figcaption>\n    <div class="frame"><iframe id="carbon" title="Gemini 4 Carbon version" tabindex="-1"></iframe></div></figure>\n  <figure><figcaption><b>Human</b></figcaption>'),
 ('The original video could not be loaded here. The code version still plays.', 'The original video could not be loaded here. The code versions still play.'),
 ('<script>\n__CORE__\n', '<script src="scene.js"></script>\n<script>\n'),
 ]

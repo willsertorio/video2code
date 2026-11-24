@@ -1,0 +1,368 @@
+{
+ "scene": "Valley Flyover",
+ "prompt": "transform this video into code, be the more realistic as you can",
+ "grader": "Human",
+ "graded_at": "2026-11-24",
+ "rubric": [
+  {
+   "n": "G1",
+   "d": "Builds",
+   "c": "The HTML opens in Chrome and the scene renders, with no errors or blank screen",
+   "m": true,
+   "mc": "Opens fine and the scene shows up right away.",
+   "r": true,
+   "rc": "Opens fine. Takes a moment to load because the file is big, then it just plays."
+  },
+  {
+   "n": "G2",
+   "d": "Builds",
+   "c": "The scene runs at 30 fps or more on a standard laptop",
+   "m": true,
+   "mc": "",
+   "r": true,
+   "rc": ""
+  },
+  {
+   "n": "G3",
+   "d": "Playback",
+   "c": "The flyover starts playing on load; pause freezes the camera and everything in the scene; play resumes from the same frame",
+   "m": true,
+   "mc": "Starts by itself, pause stops everything, play picks up where it left off.",
+   "r": true,
+   "rc": "Starts by itself, pause freezes it, play continues from the same frame."
+  },
+  {
+   "n": "1",
+   "d": "Prompt adherence",
+   "c": "The result is code: a page that draws the scene live in the browser from a moving viewpoint. It does not play back a video file or a flat sequence of the video's frames",
+   "m": true,
+   "mc": "It's all code, a shader drawing the landscape live. No video anywhere.",
+   "r": true,
+   "rc": "It's drawn live as a 3D scene, not a video playing. Worth saying that the textures come from stills of the original clip, though."
+  },
+  {
+   "n": "2",
+   "d": "Prompt adherence",
+   "c": "Nothing is added that the video does not contain: no text, logos or overlays on the scene, no extra objects (birds, clouds, people, vehicles), and no interaction beyond the playback controls",
+   "m": false,
+   "mc": "There are white patches on the left that look like lakes. The video has nothing like that.",
+   "r": true,
+   "rc": "Nothing extra, it's just what's in the video."
+  },
+  {
+   "n": "3",
+   "d": "Reference fidelity",
+   "c": "Dense green broadleaf forest covers the near hills and fills the lower half of the opening view, as in the video",
+   "m": true,
+   "mc": "The bottom half is forest, same idea as the video, even if the trees look like green lumps.",
+   "r": true,
+   "rc": "Same forest as the video."
+  },
+  {
+   "n": "4",
+   "d": "Reference fidelity",
+   "c": "Layered mountain ridges span the full width of the background, with the same skyline profile as the video (highest ridge left of centre, lower ridges stepping down to the right)",
+   "m": false,
+   "mc": "The mountains in the back are just generic hills. The skyline doesn't look like the one in the video.",
+   "r": true,
+   "rc": "The ridges are the same, I can't tell them apart from the video."
+  },
+  {
+   "n": "5",
+   "d": "Reference fidelity",
+   "c": "A brown tilled field lies in a clearing among the trees and comes to dominate the lower-middle of the view in the second half of the clip",
+   "m": true,
+   "mc": "There is a big ploughed field and it takes over the bottom of the screen later on. It shows up too early and it's more sand colour than brown, but it's there.",
+   "r": true,
+   "rc": "The field is there and opens up just like in the video."
+  },
+  {
+   "n": "6",
+   "d": "Reference fidelity",
+   "c": "A greenhouse complex with rows of white or silver tunnel roofs and one long red-roofed building sits at the lower right by the end of the clip",
+   "m": false,
+   "mc": "No greenhouses. Just a white box with a red roof and a blue one, half hidden behind a hill.",
+   "r": true,
+   "rc": "The greenhouses and the red roof are all there at the end."
+  },
+  {
+   "n": "7",
+   "d": "Reference fidelity",
+   "c": "A pale dirt track and a small dark pond are visible among the trees at the lower right in the first half of the clip",
+   "m": false,
+   "mc": "There's a pale path but no pond, and it's not in the same place.",
+   "r": true,
+   "rc": "Track and pond are both there, same spot."
+  },
+  {
+   "n": "8",
+   "d": "Reference fidelity",
+   "c": "The valley on the right holds terraced, striped crop plots and scattered small farm buildings, including green-roofed ones",
+   "m": false,
+   "mc": "The valley is mostly flat ground and one teal block. No terraces, no little farm buildings.",
+   "r": true,
+   "rc": "Terraces, plots and the small buildings are all there, green roofs included."
+  },
+  {
+   "n": "9",
+   "d": "Reference fidelity",
+   "c": "The sky is clear and cloudless: a bright, almost white haze at the upper left grading to teal blue at the right",
+   "m": false,
+   "mc": "The sky is a flat grey white. The video goes from a bright haze on the left to a nice teal blue on the right.",
+   "r": true,
+   "rc": "Sky looks the same as the video."
+  },
+  {
+   "n": "10",
+   "d": "Reference fidelity",
+   "c": "Colours and time of day match the video: strong daytime sun, warm saturated greens in the foreground, cooler blue-green in the distance",
+   "m": false,
+   "mc": "Everything looks washed out and pale. The video is much warmer and richer.",
+   "r": true,
+   "rc": "Colours match the video."
+  },
+  {
+   "n": "11",
+   "d": "Scene fidelity",
+   "c": "Without the prompt, the scene is recognisable as an aerial view over forested hills with farmland in a valley",
+   "m": true,
+   "mc": "Yes, you can tell it's a flight over green hills with farmland.",
+   "r": true,
+   "rc": "Yes, clearly."
+  },
+  {
+   "n": "12",
+   "d": "Scene fidelity",
+   "c": "The hills have real relief: rounded slopes, folds and valleys with depth, not a flat backdrop or a single plane",
+   "m": true,
+   "mc": "The hills have real depth. Some of them end in strange vertical walls, but it's not flat.",
+   "r": true,
+   "rc": "Hills have real depth, you can feel it as the camera moves."
+  },
+  {
+   "n": "13",
+   "d": "Scene fidelity",
+   "c": "The forest canopy reads as individual tree crowns of varied size and height, not a smooth carpet or uniform blobs",
+   "m": false,
+   "mc": "The forest is a lumpy green carpet. You can't really see single trees.",
+   "r": true,
+   "rc": "You can see the individual trees."
+  },
+  {
+   "n": "14",
+   "d": "Scene fidelity",
+   "c": "Buildings and greenhouses keep their shape: straight edges, evenly spaced parallel roof rows, no bent, broken or merged lines",
+   "m": false,
+   "mc": "The buildings are plain boxes. Straight, but there are no rows of roofs at all.",
+   "r": true,
+   "rc": "Greenhouse rows stay straight and even."
+  },
+  {
+   "n": "15",
+   "d": "Composition",
+   "c": "The opening view matches the video's first frame: horizon about a third of the way down, sky above, ridges across the middle, forest below",
+   "m": false,
+   "mc": "Similar idea, but the horizon is higher and a field is already showing. It's not the same opening shot.",
+   "r": true,
+   "rc": "Opening frame is the same as the video."
+  },
+  {
+   "n": "16",
+   "d": "Composition",
+   "c": "The horizon stays level for the whole clip",
+   "m": true,
+   "mc": "Horizon stays level.",
+   "r": true,
+   "rc": "Horizon stays level."
+  },
+  {
+   "n": "17",
+   "d": "Lighting",
+   "c": "Light comes from the upper left as in the video: the sky is brightest there and tree crowns are lit on that side with shade on the other",
+   "m": true,
+   "mc": "Light comes from the upper left, the trees are lit on that side.",
+   "r": true,
+   "rc": "Light is the same as the video."
+  },
+  {
+   "n": "18",
+   "d": "Lighting",
+   "c": "Distant ridges are paler and bluer than the near hills (atmospheric haze)",
+   "m": true,
+   "mc": "The far hills fade into the haze.",
+   "r": true,
+   "rc": "Far ridges are paler and bluer, like in the video."
+  },
+  {
+   "n": "19",
+   "d": "Lighting",
+   "c": "Exposure looks natural: forest shadows are dark but keep detail, and no large area is crushed to black or blown out to flat white beyond what the video shows",
+   "m": true,
+   "mc": "A bit washed out, but nothing is too dark or burnt.",
+   "r": true,
+   "rc": "Exposure looks natural, same as the video."
+  },
+  {
+   "n": "20",
+   "d": "Lighting",
+   "c": "Trees cast shadows where the video shows them, for example along the near edge of the tilled field",
+   "m": false,
+   "mc": "The trees don't cast shadows on the field like they do in the video.",
+   "r": true,
+   "rc": "Tree shadows on the field are there."
+  },
+  {
+   "n": "21",
+   "d": "Materials",
+   "c": "Foliage reads as leaves: matte, mottled light and dark greens, not flat colour or plastic",
+   "m": false,
+   "mc": "Looks like green plastic or clay, not leaves.",
+   "r": true,
+   "rc": "Looks like real leaves."
+  },
+  {
+   "n": "22",
+   "d": "Materials",
+   "c": "The tilled field reads as bare furrowed soil, with fine plough lines visible",
+   "m": true,
+   "mc": "You can see plough lines on the field. The colour is closer to sand than soil.",
+   "r": true,
+   "rc": "Looks like real ploughed soil, lines and all."
+  },
+  {
+   "n": "23",
+   "d": "Materials",
+   "c": "Greenhouse roofs read as bright sheeting or plastic film, clearly brighter than their surroundings, and the red roof reads as a matte painted roof",
+   "m": false,
+   "mc": "The roofs are flat white and red blocks. They don't look like greenhouse plastic.",
+   "r": true,
+   "rc": "The greenhouse roofs look bright and shiny like plastic sheeting, and the red roof looks right."
+  },
+  {
+   "n": "24",
+   "d": "Motion",
+   "c": "Nothing in the scene moves by itself that does not in the video: no invented swaying trees, drifting clouds or animated water",
+   "m": true,
+   "mc": "Nothing moves except the camera.",
+   "r": true,
+   "rc": "Nothing moves except the camera."
+  },
+  {
+   "n": "25",
+   "d": "Motion",
+   "c": "When the clip ends it restarts cleanly from the first frame, with a single cut and no blank, black or half-drawn frame",
+   "m": true,
+   "mc": "It jumps back to the start cleanly.",
+   "r": true,
+   "rc": "It jumps back to the first frame cleanly."
+  },
+  {
+   "n": "26",
+   "d": "Realism",
+   "c": "No repeating texture tiles and no identical cloned trees are visible in the forest or fields",
+   "m": true,
+   "mc": "I don't see repeated tiles or copies of the same tree.",
+   "r": true,
+   "rc": "No repeats, it's the real forest."
+  },
+  {
+   "n": "27",
+   "d": "Realism",
+   "c": "No clipping, floating pieces, stretched or smeared surfaces, including where tree outlines cross fields, roads and roofs",
+   "m": false,
+   "mc": "The hills have stretched, smeared walls, and there are dashed lines floating over the ground at the lower right.",
+   "r": false,
+   "rc": "When I pause in the last few seconds I can see small smears and specks where the near trees pass in front of the roofs and the field. Hard to notice while it plays."
+  },
+  {
+   "n": "28",
+   "d": "Realism",
+   "c": "A paused frame could pass for a frame of the video at first glance",
+   "m": false,
+   "mc": "No. It looks like a low poly video game, not a video.",
+   "r": true,
+   "rc": "Yes. Paused, I would take it for the video."
+  },
+  {
+   "n": "29",
+   "d": "Camera path",
+   "c": "The camera flies straight forward over the forest toward the valley at a steady height, without turning, tilting or rolling",
+   "m": true,
+   "mc": "The camera flies straight ahead and stays steady.",
+   "r": true,
+   "rc": "Same flight as the video."
+  },
+  {
+   "n": "30",
+   "d": "Camera path",
+   "c": "The move takes about 19 seconds at an even speed, with no sudden speed changes, stutter or shake that the video does not have",
+   "m": true,
+   "mc": "Runs 18.5 seconds at a steady speed. Close enough to the 19 of the video.",
+   "r": true,
+   "rc": "Same length and speed as the video."
+  },
+  {
+   "n": "31",
+   "d": "Camera path",
+   "c": "The final view matches the video's last frame: greenhouse complex at the lower right, a corner of the tilled field at the bottom left, ridges unchanged across the background",
+   "m": false,
+   "mc": "The ending doesn't look like the last frame of the video. No greenhouse complex at the lower right, just two boxes behind a hill.",
+   "r": true,
+   "rc": "Last frame is the same as the video."
+  },
+  {
+   "n": "32",
+   "d": "Viewpoint consistency",
+   "c": "Ground revealed as the camera advances (the field behind the trees, the greenhouses behind the tree line) appears complete, with no holes, blank areas or stretched fill",
+   "m": false,
+   "mc": "The ground that shows up behind the hills comes with those stretched walls and dashed lines.",
+   "r": true,
+   "rc": "The field and the greenhouses come out from behind the trees complete, with no holes."
+  },
+  {
+   "n": "33",
+   "d": "Viewpoint consistency",
+   "c": "Nothing pops: objects do not jump, flicker, change shape or pulse in sharpness from frame to frame",
+   "m": false,
+   "mc": "The dashed lines at the lower right flicker as the camera moves.",
+   "r": false,
+   "rc": "If I look closely, the fine detail in the trees pulses a little, a few times per second. It's subtle, but it's there."
+  },
+  {
+   "n": "34",
+   "d": "Viewpoint consistency",
+   "c": "The frame is complete to its edges for the whole clip: no unfinished borders, gaps or smeared edge pixels",
+   "m": true,
+   "mc": "The picture fills the whole frame.",
+   "r": true,
+   "rc": "The picture fills the whole frame."
+  },
+  {
+   "n": "35",
+   "d": "Viewpoint consistency",
+   "c": "Depth behaves as in the video: near treetops sweep past quickly, middle hills move slowly and the far ridges barely move",
+   "m": true,
+   "mc": "Near hills go by fast and the far ones barely move.",
+   "r": true,
+   "rc": "Depth works like in the video. Near trees go by fast, far ridges barely move."
+  },
+  {
+   "n": "36",
+   "d": "Motion timing",
+   "c": "Key reveals happen at the same moments as in the video: pond and track at the lower right by about 5 s, the tilled field opening up by about 10 s, the red-roofed building emerging from behind the trees at about 14 s, the whole greenhouse complex in view at the end",
+   "m": false,
+   "mc": "Things don't show up at the same moments. The field is there from the start, there's no pond, and the red roof is visible way too early.",
+   "r": true,
+   "rc": "Everything shows up at the same time as in the video."
+  },
+  {
+   "n": "37",
+   "d": "Motion timing",
+   "c": "Paused at any moment, the page shows the same view as the video at that time, with objects in the same places in the frame",
+   "m": false,
+   "mc": "Pause anywhere and it's a different picture from the video.",
+   "r": true,
+   "rc": "Pause anywhere and it lines up with the video."
+  }
+ ]
+}

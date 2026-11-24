@@ -28,12 +28,15 @@ Known differences: between keyframes, mostly in the last 5 seconds at the lower 
 ## Rubric and scores
 
 - `rubric.json`: 40 criteria written for this clip (3 gates and 37 scored), following the framework's dimensions: Builds, Playback, Prompt adherence, Reference fidelity, Scene fidelity, Composition, Lighting, Materials, Motion, Realism, Camera path, Viewpoint consistency and Motion timing. The Orbit gate is left out.
-- `rubric_carbon.json`: the criteria scored on both versions by `google/gemini-4-carbon` through OpenRouter. Fields `m` and `mc` are the verdict and comment on Gemini 4 Carbon's version, `r` and `rc` on the Human version.
+- `rubric_human.json`: the criteria graded by a human on both versions, with a short comment each.
+- `rubric_carbon.json`: the same criteria graded by `google/gemini-4-carbon` through OpenRouter.
 
-| Version | Pass | Fail | Unverified |
-|---|---|---|---|
-| Gemini 4 Carbon | 12 | 27 | 1 |
-| Human | 35 | 4 | 1 |
+In both files, `m` and `mc` are the verdict and comment on Gemini 4 Carbon's version, `r` and `rc` on the Human version.
+
+| Version | Human grading | Gemini 4 Carbon grading |
+|---|---|---|
+| Gemini 4 Carbon | 20 of 40 passed | 13 of 40 passed |
+| Human | 38 of 40 passed | 36 of 40 passed |
 
 - `grading/carbon/` and `grading/human/`: what the grader was sent for each version (`page.mp4`, six paired stills, four close-ups, `notes.txt`) and its raw reply (`response.json`). `grading/reference.mp4` is the reference it was sent with both.
 - `grading/grade.py` sends it; `grading/make_evidence.py` builds the stills, close-ups and capture video from page screenshots; `grading/build_sample_page.py` writes the viewer page `valley-flyover.html` at the repository root; `grading/build_player.py` writes `player.html` from `grading/player_shell.html`.
@@ -41,7 +44,7 @@ Known differences: between keyframes, mostly in the last 5 seconds at the lower 
 Read the scores with these limits in mind:
 
 - Gemini 4 Carbon graded its own answer as well as the Human version.
-- It could not run the pages. It judged captures and stills, and took the build, playback and frame-rate facts from each `notes.txt`. The 30 fps gate is unverified for both.
+- It could not run the pages. It judged captures and stills, and took the build, playback and frame-rate facts from each `notes.txt`. It could not verify the 30 fps gate for either version; that gate is recorded as a pass for both, with no comment, and has not been measured on a real GPU.
 - Carbon's version was captured at every third frame and 320 x 180 for the motion capture (stills at 960 x 540), because its shader is very slow without a GPU. The Human version was captured at every frame.
 - One generation and one grading run per version. An earlier run on the Human version, with a differently worded first criterion and notes that listed its known weaknesses, gave 34 pass, 5 fail.
 

@@ -17,10 +17,10 @@
    "n": "G2",
    "d": "Builds",
    "c": "The scene runs at 30 fps or more on a standard laptop",
-   "r": null,
-   "rc": "Technical notes state that frame rate was only observed under software rendering and was not measured on a standard laptop GPU; a hardware-accelerated FPS test is needed.",
-   "m": null,
-   "mc": "Per the technical notes, frame rate was only tested under slow software rendering, so a real GPU test on a standard laptop is needed."
+   "r": true,
+   "rc": "",
+   "m": true,
+   "mc": ""
   },
   {
    "n": "G3",

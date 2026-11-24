@@ -6,7 +6,7 @@ A video rebuilt as code.
 
 ## Viewer
 
-`index.html` is the Overview: what the comparison is and how each of the three versions was made. `sample.html` shows the side-by-side player inside the viewer. Both use `css/docs.css` and the Geist fonts in `fonts/` (licences in `licenses.csv`).
+`index.html` is the Overview of the Valley Flyover sample: what the comparison is and how each of the three versions was made. `valley-flyover.html` shows its side-by-side player and rubric inside the viewer (see `valley-flyover/README.md`). `sample.html`, the Dusk Flock page, is still in the repository but is no longer linked from the viewer. Both use `css/docs.css` and the Geist fonts in `fonts/` (licences in `licenses.csv`).
 
 ## Side-by-side player
 
