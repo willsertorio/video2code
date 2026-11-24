@@ -14,8 +14,12 @@ ICON_FILM = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke=
 word = {True: ('Pass', 'yes'), False: ('Fail', 'no'), None: ('Unverified', 'unv')}
 VERS = [('m', 'mc', 'Carbon', 'Gemini 4 Carbon'), ('r', 'rc', 'Human', 'Human')]   # the two code versions being graded
 n = len(d['rubric'])
+# criteria where the two graders gave a different verdict on either version
+_by = [{r['n']: r for r in g[2]['rubric']} for g in GRADERS]
+DIFF = {k for k in _by[0] if any(_by[0][k][v] != _by[1][k][v] for v in ('m', 'r'))}
 
 def panel(gid, gname, data, hidden):
+    oname, other = next((g[1], {r['n']: r for r in g[2]['rubric']}) for g in GRADERS if g[0] != gid)
     groups = []
     for r in data['rubric']:
         if not groups or groups[-1][0] != r['d']: groups.append((r['d'], []))
@@ -27,12 +31,15 @@ def panel(gid, gname, data, hidden):
         items = ''
         for r in rows:
             marks = ''.join(f'<span class="{word[r[k]][1]}"><i>{lab}</i> {word[r[k]][0]}</span>' for k, _, lab, _ in VERS)
+            o = other[r['n']]          # the other grader's verdict, shown in the disagreements view where it differs
             body = ''.join(f'<div class="k">{esc(full)} &middot; <span class="{word[r[k]][1]}">{word[r[k]][0]}</span></div>'
-                           + (f'<p class="txt reply">{esc(r[kc])}</p>' if r[kc] else '') for k, kc, _, full in VERS)
-            items += (f'<details class="acc"><summary><span class="n">{esc(r["n"])}</span><span class="p">{esc(r["c"])}</span>'
+                           + (f'<p class="txt reply">{esc(r[kc])}</p>' if r[kc] else '')
+                           + (f'<div class="k other">{esc(oname)} said &middot; <span class="{word[o[k]][1]}">{word[o[k]][0]}</span></div><p class="txt reply other">{esc(o[kc])}</p>' if o[k] != r[k] else '')
+                           for k, kc, _, full in VERS)
+            items += (f'<details class="acc{"" if r["n"] in DIFF else " same"}"><summary><span class="n">{esc(r["n"])}</span><span class="p">{esc(r["c"])}</span>'
                       f'<span class="t">{marks}</span></summary><div class="body">{body}</div></details>')
         tag = '<span class="tag">Gate</span>' if gate else ''
-        secs.append(f'<details class="sec"><summary><h2>{esc(name)}</h2>{tag}<span class="label">{tally}</span></summary><div class="accs">{items}</div></details>')
+        secs.append(f'<details class="sec{"" if any(r["n"] in DIFF for r in rows) else " same"}"><summary><h2>{esc(name)}</h2>{tag}<span class="label">{tally}</span></summary><div class="accs">{items}</div></details>')
     cnt = {k: (sum(r[k] is True for r in data['rubric']), sum(r[k] is False for r in data['rubric'])) for k, _, _, _ in VERS}
     rows = ''.join(f'<tr><td>{esc(full)}</td><td class="mono yes">{cnt[k][0]}</td><td class="mono no">{cnt[k][1]}</td></tr>' for k, _, _, full in VERS)
     table = f'<div class="tally table-wrap"><table class="rubric plain"><thead><tr><th>Version</th><th class="num">Passed</th><th class="num">Failed</th></tr></thead><tbody>{rows}</tbody></table></div>'
@@ -66,6 +73,13 @@ page = f'''<!doctype html>
 .seg button:focus-visible {{ outline: 2px solid var(--accent); outline-offset: -2px; }}
 .rub-head .by {{ display: flex; align-items: center; gap: 10px; font: 400 11px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); }}
 .grader[hidden] {{ display: none; }}
+.rub.only-diff .same {{ display: none; }}
+.rub .other {{ display: none; }}
+.rub.only-diff .other {{ display: block; }}
+.rub .acc .k.other {{ margin-left: 18px; }}
+.rub .acc .txt.reply.other {{ margin-left: 18px; border-left-color: #E6B450; }}
+.rub-head .right {{ display: flex; flex-wrap: wrap; gap: 8px; }}
+.btn[aria-pressed="true"] {{ border-color: var(--accent); color: var(--accent); }}
 .tally td.mono, .tally th.num {{ text-align: right; font-weight: 600; }}
 .yes {{ color: #4ADE80; }} .no {{ color: #F87171; }}
 .prompt {{ display: flex; gap: 14px; align-items: center; margin: 14px 0 0; padding: 12px 14px; background: var(--side); border: 1px solid var(--line); border-radius: 8px; }}
@@ -99,7 +113,7 @@ page = f'''<!doctype html>
 <div class="prompt"><div><div class="label">Prompt sent to Gemini 4 Carbon, with the video</div><p>{esc(d["prompt"])}</p></div></div>
 <section class="rub">
 <h2>Rubric</h2>
-<div class="rub-head"><div class="by"><span>Graded by</span><div class="seg" role="tablist" aria-label="Grader">{tabs}</div></div><button class="btn" id="toggle" type="button" aria-expanded="false">Expand all</button></div>
+<div class="rub-head"><div class="by"><span>Graded by</span><div class="seg" role="tablist" aria-label="Grader">{tabs}</div></div><div class="right"><button class="btn" id="diff" type="button" aria-pressed="false">Disagreements only ({len(DIFF)})</button><button class="btn" id="toggle" type="button" aria-expanded="false">Expand all</button></div></div>
 {"".join(panels)}
 </section>
 </article></main>
@@ -107,6 +121,8 @@ page = f'''<!doctype html>
 const btn = document.getElementById('toggle'), tabs = [...document.querySelectorAll('.seg button')];
 const shown = () => document.querySelector('.grader:not([hidden])');
 const setOpen = open => {{ shown().querySelectorAll('details').forEach(el => {{ el.open = open; }}); btn.setAttribute('aria-expanded', open); btn.textContent = open ? 'Collapse all' : 'Expand all'; }};
+const diff = document.getElementById('diff'), rubEl = document.querySelector('.rub');
+diff.addEventListener('click', () => {{ const on = diff.getAttribute('aria-pressed') !== 'true'; diff.setAttribute('aria-pressed', on); rubEl.classList.toggle('only-diff', on); if (on) setOpen(true); }});
 btn.addEventListener('click', () => setOpen(btn.getAttribute('aria-expanded') !== 'true'));
 tabs.forEach(t => t.addEventListener('click', () => {{
   const open = btn.getAttribute('aria-expanded') === 'true';
