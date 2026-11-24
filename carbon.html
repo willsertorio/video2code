@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Golden Hour Flock — Volumetric Sky & Kinematic Simulation</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%;
+    height: 100%;
+    background: #0d1015;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    user-select: none;
+  }
+
+  #frame {
+    position: relative;
+    height: 100vh;
+    width: calc(100vh * 9 / 16);
+    max-width: 100vw;
+    max-height: calc(100vw * 16 / 9);
+    background: #7c93a8;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.75);
+    overflow: hidden;
+  }
+
+  @media (max-aspect-ratio: 10/16) {
+    #frame {
+      width: 100vw;
+      height: 100vh;
+      max-height: none;
+    }
+  }
+
+  canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* Subtle hover-only video controls */
+  #hud {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: rgba(18, 24, 32, 0.42);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: auto;
+  }
+
+  #frame:hover #hud,
+  #hud.visible {
+    opacity: 1;
+  }
+
+  #playBtn {
+    background: none;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    opacity: 0.9;
+  }
+  #playBtn:hover { opacity: 1; }
+
+  #scrubber {
+    flex: 1;
+    appearance: none;
+    -webkit-appearance: none;
+    height: 3px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.28);
+    outline: none;
+    cursor: pointer;
+  }
+  #scrubber::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: #ffdfc2;
+    box-shadow: 0 0 6px rgba(0,0,0,0.4);
+  }
+</style>
+</head>
+<body>
+
+<div id="frame">
+  <canvas id="glcanvas"></canvas>
+  <div id="hud">
+    <button id="playBtn" title="Play / Pause" aria-label="Play or Pause">
+      <svg id="iconPause" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+        <rect x="2" y="1.5" width="3" height="9" rx="0.8"/>
+        <rect x="7" y="1.5" width="3" height="9" rx="0.8"/>
+      </svg>
+      <svg id="iconPlay" width="12" height="12" viewBox="0 0 12 12" fill="currentColor" style="display:none">
+        <path d="M2.5 1.5L10.5 6L2.5 10.5V1.5Z"/>
+      </svg>
+    </button>
+    <span id="timeLabel">00:00</span>
+    <input id="scrubber" type="range" min="0" max="19.6" step="0.01" value="0" />
+    <span>00:19</span>
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('glcanvas');
+  const gl = canvas.getContext('webgl', {
+    antialias: true,
+    alpha: false,
+    depth: false,
+    powerPreference: 'high-performance'
+  });
+
+  if (!gl) {
+    document.body.innerHTML = '<p style="color:#fff">WebGL is required to view this simulation.</p>';
+    return;
+  }
+
+  // ============================================================================
+  // 1. PROCEDURAL 3D NOISE LUT TEXTURE (Hardware-filtered trilinear 3D noise)
+  // ============================================================================
+  function createNoiseTexture() {
+    const size = 256;
+    const rPlane = new Uint8Array(size * size);
+    // Deterministic PRNG so cloud formations match the exact composition
+    let seed = 13374209;
+    const rand = () => {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return (seed >>> 24) & 255;
+    };
+
+    for (let i = 0; i < size * size; i++) {
+      rPlane[i] = rand();
+    }
+
+    const data = new Uint8Array(size * size * 4);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const idx = (y * size + x) * 4;
+        const x2 = (x + 37) & 255;
+        const y2 = (y + 17) & 255;
+        data[idx + 0] = rPlane[y * size + x];
+        data[idx + 1] = rPlane[y2 * size + x2];
+        // Secondary offset channel for fine detail decorrelation
+        const x3 = (x + 113) & 255;
+        const y3 = (y + 79) & 255;
+        data[idx + 2] = rPlane[y3 * size + x3];
+        data[idx + 3] = 255;
+      }
+    }
+
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    return tex;
+  }
+
+  const noiseTex = createNoiseTexture();
+
+  // ============================================================================
+  // 2. VOLUMETRIC GOLDEN-HOUR SKY & CLOUD SHADER
+  // ============================================================================
+  const skyVS = `
+    attribute vec2 aPos;
+    varying vec2 vUv;
+    void main() {
+      vUv = aPos * 0.5 + 0.5;
+      gl_Position = vec4(aPos, 0.0, 1.0);
+    }
+  `;
+
+  const skyFS = `
+    precision highp float;
+    varying vec2 vUv;
+
+    uniform vec2 uRes;
+    uniform float uTime;
+    uniform mat3 uCamMat;
+    uniform float uTanHalfFov;
+    uniform sampler2D uNoise;
+    uniform float uLoopFade;
+
+    // Fast hardware-interpolated 3D noise (IQ LUT technique)
+    float noise3D(vec3 x) {
+      vec3 p = floor(x);
+      vec3 f = fract(x);
+      f = f * f * (3.0 - 2.0 * f);
+      vec2 uv = (p.xy + vec2(37.0, 17.0) * p.z) + f.xy;
+      vec2 rg = texture2D(uNoise, (uv + 0.5) / 256.0).yx;
+      return mix(rg.x, rg.y, f.z);
+    }
+
+    const mat3 m3 = mat3(
+       0.00,  0.80,  0.60,
+      -0.80,  0.36, -0.48,
+      -0.60, -0.48,  0.64
+    );
+
+    // Billowy Cumulus FBM: mixes smooth Perlin-like lobes with puffy cauliflower ridges
+    float fbmCloud(vec3 p) {
+      float f = 0.0;
+      float amp = 0.52;
+      for (int i = 0; i < 5; i++) {
+        float n = noise3D(p);
+        float billow = 1.0 - abs(n * 2.0 - 1.0);
+        // More billowy/cauliflower at medium-high frequencies
+        float mixed = mix(n, billow * billow * 0.85 + n * 0.35, 0.42);
+        f += amp * mixed;
+        p = m3 * p * 2.04 + vec3(0.13, -0.07, 0.21);
+        amp *= 0.50;
+      }
+      return f;
+    }
+
+    // Lighter 3-octave FBM for shadow rays
+    float fbmLight(vec3 p) {
+      float f = 0.0;
+      float amp = 0.55;
+      for (int i = 0; i < 3; i++) {
+        float n = noise3D(p);
+        float billow = 1.0 - abs(n * 2.0 - 1.0);
+        f += amp * mix(n, billow * 0.9, 0.38);
+        p = m3 * p * 2.05;
+        amp *= 0.5;
+      }
+      return f;
+    }
+
+    // Dual-lobe Henyey-Greenstein phase function for warm forward/silver-lining scattering
+    float hgPhase(float cosTheta, float g) {
+      float g2 = g * g;
+      return (1.0 - g2) / (4.0 * 3.14159 * pow(1.0 + g2 - 2.0 * g * cosTheta, 1.5));
+    }
+
+    // Sculpted cloud density field matching the vertical/horizontal sky story:
+    // Upper sky: scattered golden-lit cumulus puffs with clear powder-blue gaps.
+    // Mid sky: billowing layered cumulus clouds.
+    // Lower-left sky: dense, moody slate-blue stratocumulus bank with a few warm peaks.
+    float cloudDensity(vec3 pos, vec3 rd, bool highDetail) {
+      // Gentle wind drift
+      vec3 wind = vec3(-0.022, 0.004, 0.008) * uTime;
+      vec3 q = pos * 0.165 + wind;
+
+      // Normalized vertical height inside the cloud slab [0..1]
+      float h = clamp((pos.y - 10.0) / 11.5, 0.0, 1.0);
+      // Cumulus vertical profile: flat/soft bottom, rounded billowing top
+      float heightGrad = smoothstep(0.0, 0.22, h) * smoothstep(1.0, 0.52, h);
+
+      // Macro coverage sculpted by sky elevation & azimuth so panning down-left
+      // transitions naturally from scattered puffs into the thick overcast bank
+      float elev = rd.y;
+      float azim = atan(rd.x, -rd.z); // positive = right, negative = left
+
+      // Coverage increases strongly as camera tilts down & pans left
+      float bankFactor = smoothstep(0.34, 0.06, elev) + smoothstep(0.05, -0.35, azim) * 0.18;
+      float baseThreshold = mix(0.615, 0.355, clamp(bankFactor, 0.0, 1.05));
+
+      // Add macro patchiness so upper sky has distinct isolated cumulus puffs
+      float macro = noise3D(q * 0.34 + vec3(2.4, 1.1, 4.7));
+      float macro2 = noise3D(q * 0.72 + vec3(7.1, 3.3, 1.9));
+      float patchMask = mix(macro * 0.65 + macro2 * 0.35, 0.68, smoothstep(0.26, 0.05, elev));
+
+      float shape = highDetail ? fbmCloud(q * 2.15 + vec3(1.7, 4.2, 0.8))
+                               : fbmLight(q * 2.15 + vec3(1.7, 4.2, 0.8));
+
+      float raw = shape * 0.76 + patchMask * 0.42;
+      float d = smoothstep(baseThreshold, baseThreshold + 0.26, raw) * heightGrad;
+
+      // Secondary lower hazy stratus veil in the bottom sky (0:13 - 0:19)
+      float lowVeil = smoothstep(0.16, 0.01, elev) * smoothstep(0.0, 0.45, 1.0 - abs(h - 0.32) * 2.4);
+      float veilNoise = noise3D(q * 1.1 + vec3(5.2, 0.4, 2.1));
+      d += lowVeil * smoothstep(0.28, 0.75, veilNoise) * 0.42;
+
+      return d * 1.55;
+    }
+
+    // Interleaved gradient noise for jittering ray start & eliminating banding
+    float ign(vec2 px) {
+      return fract(52.9829189 * fract(dot(px, vec2(0.06711056, 0.00583715))));
+    }
+
+    void main() {
+      vec2 aspectUv = (vUv - 0.5) * 2.0;
+      aspectUv.x *= uRes.x / uRes.y;
+
+      // Telephoto ray direction
+      vec3 rdCam = normalize(vec3(aspectUv * uTanHalfFov, -1.0));
+      vec3 rd = normalize(uCamMat * rdCam);
+
+      // Low golden-hour sun positioned to the right & slightly forward
+      vec3 sunDir = normalize(vec3(0.88, 0.145, -0.45));
+      float sunDot = dot(rd, sunDir);
+
+      // --- 1. Base Golden-Hour Sky Gradient ---
+      float skyY = clamp(rd.y * 2.2, -0.2, 1.0);
+      vec3 zenithBlue  = vec3(0.575, 0.685, 0.765); // Soft powder cerulean
+      vec3 midSkyBlue  = vec3(0.645, 0.730, 0.788); // Pale pastel blue
+      vec3 horizonHaze = vec3(0.560, 0.625, 0.705); // Slate atmospheric base
+
+      vec3 skyCol = mix(horizonHaze, midSkyBlue, smoothstep(-0.05, 0.24, skyY));
+      skyCol = mix(skyCol, zenithBlue, smoothstep(0.24, 0.85, skyY));
+
+      // Warm golden atmospheric glow towards the right side of the sky
+      float warmGlow = clamp(sunDot * 0.5 + 0.5, 0.0, 1.0);
+      skyCol += vec3(0.16, 0.095, 0.045) * pow(warmGlow, 3.2) * smoothstep(-0.05, 0.45, rd.y);
+
+      // Subtle diagonal crepuscular light bands visible in upper sky (0:00 - 0:04)
+      float rayAngle = rd.y * 1.65 + atan(rd.x, -rd.z) * 0.52;
+      float crepuscular = sin(rayAngle * 24.0 + 1.2) * 0.5 + 0.5;
+      crepuscular *= sin(rayAngle * 11.0 - 0.6) * 0.5 + 0.5;
+      skyCol += vec3(0.045, 0.032, 0.018) * crepuscular * smoothstep(0.14, 0.36, rd.y);
+
+      // --- 2. Volumetric Cloud Slab Raymarching ---
+      // Intersect tilted spherical/planar atmospheric shell
+      float safeY = max(rd.y + 0.14, 0.055);
+      float tNear = 10.0 / safeY;
+      float tFar  = 21.5 / safeY;
+      tFar = min(tFar, tNear + 95.0);
+
+      const int STEPS = 36;
+      float dt = (tFar - tNear) / float(STEPS);
+      float jitter = ign(gl_FragCoord.xy);
+      float t = tNear + dt * jitter;
+
+      vec3 accumLight = vec3(0.0);
+      float transmittance = 1.0;
+
+      // Phase function for golden edge scattering
+      float phase = mix(hgPhase(sunDot, 0.42), hgPhase(sunDot, -0.22), 0.35);
+
+      // Sun & ambient cloud colors carefully matched to footage
+      vec3 sunColorBright = vec3(1.12, 0.88, 0.69);  // Warm peach-cream highlights
+      vec3 sunColorMid    = vec3(0.96, 0.71, 0.59);  // Apricot / coral mid-glow
+      vec3 shadowTop      = vec3(0.63, 0.62, 0.69);  // Dusty lavender-mauve midtone
+      vec3 shadowDeep     = vec3(0.39, 0.47, 0.58);  // Deep slate-blue cloud base
+
+      for (int i = 0; i < STEPS; i++) {
+        if (transmittance < 0.015) break;
+        vec3 pos = rd * t;
+        float dens = cloudDensity(pos, rd, true);
+
+        if (dens > 0.002) {
+          // March 3 steps toward the low right-hand sun for self-shadowing
+          float lightOptDepth = 0.0;
+          lightOptDepth += cloudDensity(pos + sunDir * 0.85, rd, false) * 0.65;
+          lightOptDepth += cloudDensity(pos + sunDir * 2.10, rd, false) * 0.95;
+          lightOptDepth += cloudDensity(pos + sunDir * 4.40, rd, false) * 1.25;
+
+          // Multi-scattering approximation (keeps shadows lush & pastel, never harsh black)
+          float primaryTrans = exp(-lightOptDepth * 1.25);
+          float multiScatter = exp(-lightOptDepth * 0.32) * 0.52;
+          float sunVisibility = clamp(primaryTrans + multiScatter * 0.48, 0.0, 1.0);
+
+          // Powder-sugar effect on thin sunlit cloud fringes
+          float powder = 1.0 - exp(-dens * 3.4);
+          float litFactor = sunVisibility * mix(0.72, 1.18, powder);
+
+          // Lower clouds sit further inside Earth's shadow -> cooler blue ambient
+          float altitudeWarmth = smoothstep(0.04, 0.28, rd.y);
+          float hNorm = clamp((pos.y - 10.0) / 11.5, 0.0, 1.0);
+
+          vec3 ambient = mix(shadowDeep, shadowTop, hNorm * 0.75 + altitudeWarmth * 0.25);
+          vec3 directSun = mix(sunColorMid, sunColorBright, sunVisibility) * (0.52 + 0.75 * phase);
+
+          // Suppress direct sunlight deep in the lower-left cloud bank except on high peaks
+          float shadowBankMask = mix(0.28 + 0.72 * smoothstep(0.55, 0.92, hNorm), 1.0, smoothstep(0.03, 0.20, rd.y));
+          vec3 sampleCol = mix(ambient, directSun, clamp(litFactor * shadowBankMask * 0.86, 0.0, 1.0));
+
+          // Aerial perspective blend on very distant lower clouds
+          float distFog = 1.0 - exp(-t * 0.0045);
+          vec3 fogTint = mix(vec3(0.49, 0.55, 0.63), skyCol, smoothstep(0.0, 0.25, rd.y));
+          sampleCol = mix(sampleCol, fogTint, distFog * 0.42);
+
+          float stepExt = dens * dt * 0.21;
+          float stepTrans = exp(-stepExt);
+          accumLight += transmittance * (1.0 - stepTrans) * sampleCol;
+          transmittance *= stepTrans;
+        }
+        t += dt;
+      }
+
+      vec3 col = accumLight + transmittance * skyCol;
+
+      // Subtle atmospheric softening at the bottom of the frame (0:17 - 0:19)
+      float bottomHaze = smoothstep(0.09, -0.04, rd.y);
+      col = mix(col, vec3(0.505, 0.558, 0.625), bottomHaze * 0.52);
+
+      // Gentle S-curve photographic tonemapping + smartphone sensor micro-grain
+      col = clamp(col, 0.0, 1.0);
+      col = mix(col, smoothstep(0.0, 1.0, col), 0.16);
+
+      // Subtle optical vignette
+      float vig = 1.0 - dot(vUv - 0.5, vUv - 0.5) * 0.14;
+      col *= vig;
+
+      // Fine animated sensor grain (prevents 8-bit gradient banding & matches real camera footage)
+      float grain = ign(gl_FragCoord.xy + fract(uTime * 37.0) * 100.0) - 0.5;
+      col += grain * (1.9 / 255.0);
+
+      // Seamless cross-dissolve through soft twilight mist at loop boundary
+      if (uLoopFade > 0.001) {
+        vec3 loopMist = vec3(0.56, 0.63, 0.71);
+        col = mix(col, loopMist, uLoopFade);
+      }
+
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `;
+
+  // ============================================================================
+  // 3. 3D ARTICULATED BIRD SHADER (Aerial Perspective + Golden Rim Lighting)
+  // ============================================================================
+  const birdVS = `
+    attribute vec3 aPosition;
+    attribute vec3 aNormal;
+    attribute vec4 aMeta; // x: hazeFactor, y: opacity, z: sunRim, w: softEdge
+
+    uniform mat3 uCamInv;
+    uniform float uTanHalfFov;
+    uniform vec2 uRes;
+
+    varying float vHaze;
+    varying float vAlpha;
+    varying vec3 vNormal;
+    varying vec3 vWorldDir;
+    varying float vSoftEdge;
+
+    void main() {
+      vec3 camPos = uCamInv * aPosition;
+      float z = max(-camPos.z, 0.1);
+      float aspect = uRes.x / uRes.y;
+
+      vec2 ndc;
+      ndc.y = camPos.y / (z * uTanHalfFov);
+      ndc.x = camPos.x / (z * uTanHalfFov * aspect);
+
+      vHaze = aMeta.x;
+      vAlpha = aMeta.y;
+      vSoftEdge = aMeta.w;
+      vNormal = normalize(aNormal);
+      vWorldDir = normalize(aPosition);
+
+      gl_Position = vec4(ndc, 0.0, 1.0);
+    }
+  `;
+
+  const birdFS = `
+    precision mediump float;
+    varying float vHaze;
+    varying float vAlpha;
+    varying vec3 vNormal;
+    varying vec3 vWorldDir;
+    varying float vSoftEdge;
+    uniform float uLoopFade;
+
+    void main() {
+      vec3 sunDir = normalize(vec3(0.88, 0.145, -0.45));
+      float sunLit = clamp(dot(vNormal, sunDir) * 0.5 + 0.5, 0.0, 1.0);
+
+      // Dark charcoal plumage with subtle warm sunset glint on upper wing surfaces
+      vec3 darkPlumage = vec3(0.14, 0.15, 0.19);
+      vec3 warmWingTop = vec3(0.34, 0.28, 0.27);
+      vec3 birdCol = mix(darkPlumage, warmWingTop, pow(sunLit, 2.2) * 0.55);
+
+      // Match local sky/cloud atmospheric scattering color along the bird's sightline
+      float elev = vWorldDir.y;
+      vec3 upperHaze = vec3(0.62, 0.69, 0.76);
+      vec3 lowerHaze = vec3(0.46, 0.53, 0.62);
+      vec3 aerialColor = mix(lowerHaze, upperHaze, smoothstep(0.03, 0.24, elev));
+
+      vec3 finalCol = mix(birdCol, aerialColor, clamp(vHaze, 0.0, 0.92));
+      float alpha = vAlpha * vSoftEdge * (1.0 - uLoopFade);
+
+      gl_FragColor = vec4(finalCol, alpha);
+    }
+  `;
+
+  function compileShader(type, src) {
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+      console.error(gl.getShaderInfoLog(sh));
+    }
+    return sh;
+  }
+
+  function createProgram(vsSrc, fsSrc) {
+    const prog = gl.createProgram();
+    gl.attachShader(prog, compileShader(gl.VERTEX_SHADER, vsSrc));
+    gl.attachShader(prog, compileShader(gl.FRAGMENT_SHADER, fsSrc));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      console.error(gl.getProgramInfoLog(prog));
+    }
+    return prog;
+  }
+
+  const skyProg = createProgram(skyVS, skyFS);
+  const birdProg = createProgram(birdVS, birdFS);
+
+  // Sky Quad Setup
+  const quadBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1]), gl.STATIC_DRAW);
+
+  const skyLoc = {
+    aPos: gl.getAttribLocation(skyProg, 'aPos'),
+    uRes: gl.getUniformLocation(skyProg, 'uRes'),
+    uTime: gl.getUniformLocation(skyProg, 'uTime'),
+    uCamMat: gl.getUniformLocation(skyProg, 'uCamMat'),
+    uTanHalfFov: gl.getUniformLocation(skyProg, 'uTanHalfFov'),
+    uNoise: gl.getUniformLocation(skyProg, 'uNoise'),
+    uLoopFade: gl.getUniformLocation(skyProg, 'uLoopFade')
+  };
+
+  // Bird Dynamic Mesh Buffer
+  const birdBuf = gl.createBuffer();
+  const MAX_BIRDS = 20;
+  const VERTS_PER_BIRD = 42; // 14 triangles per 3D articulated bird
+  const FLOATS_PER_VERT = 10; // pos(3) + norm(3) + meta(4)
+  const birdVertexData = new Float32Array(MAX_BIRDS * VERTS_PER_BIRD * FLOATS_PER_VERT);
+
+  const birdLoc = {
+    aPosition: gl.getAttribLocation(birdProg, 'aPosition'),
+    aNormal: gl.getAttribLocation(birdProg, 'aNormal'),
+    aMeta: gl.getAttribLocation(birdProg, 'aMeta'),
+    uCamInv: gl.getUniformLocation(birdProg, 'uCamInv'),
+    uTanHalfFov: gl.getUniformLocation(birdProg, 'uTanHalfFov'),
+    uRes: gl.getUniformLocation(birdProg, 'uRes'),
+    uLoopFade: gl.getUniformLocation(birdProg, 'uLoopFade')
+  };
+
+  // ============================================================================
+  // 4. FLOCK CHOREOGRAPHY & KINEMATICS (Matches 00:00 -> 00:19.6 shot)
+  // ============================================================================
+  const DURATION = 19.6;
+
+  // Deterministic pseudo-random helper for bird traits
+  function hash1(n) {
+    const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+    return x - Math.floor(x);
+  }
+
+  // Two distinct groups at t=0:
+  // Group A (7 birds): clustered near center-right (0:00), stretching into lead line
+  // Group B (12 birds): entering from far right edge in diagonal echelon (0:01-0:03),
+  // catching up and merging into a sweeping horizontal wave across the sky (0:06-0:19).
+  const birds = [];
+
+  for (let i = 0; i < 19; i++) {
+    const isGroupA = i < 7;
+    const idxInGroup = isGroupA ? i : (i - 7);
+
+    // Initial tightness at t=0..1 (Group A clustered & banking, Group B tight diagonal)
+    let initAzOffset, initElOffset, targetAzOffset, targetElOffset, distOffset;
+
+    if (isGroupA) {
+      // Clustered at 0:00 (around x=0.68, y=0.57), with one slightly lower straggler
+      const clusterAz = [0.008, 0.003, -0.004, -0.011, -0.019, -0.027, 0.004][idxInGroup];
+      const clusterEl = [0.009, 0.005, 0.001, -0.003, -0.006, -0.008, -0.022][idxInGroup];
+      initAzOffset = 0.032 + clusterAz;
+      initElOffset = -0.015 + clusterEl;
+
+      // Spreads out into left/leading wing of the merged skein
+      targetAzOffset = 0.068 - idxInGroup * 0.0125 + (hash1(i * 3) - 0.5) * 0.005;
+      targetElOffset = 0.008 - Math.sin(idxInGroup * 0.7) * 0.013 + (idxInGroup === 6 ? -0.018 : 0.0);
+      distOffset = idxInGroup * 1.4;
+    } else {
+      // Enters from right edge in crisp diagonal line (0:00 - 0:03)
+      initAzOffset = -0.072 - idxInGroup * 0.0068;
+      initElOffset = 0.014 - idxInGroup * 0.0038;
+
+      // Merges seamlessly to form the right half of the undulating flock
+      targetAzOffset = -0.010 - idxInGroup * 0.0072 + (hash1(i * 7) - 0.5) * 0.006;
+      targetElOffset = -0.004 + Math.cos(idxInGroup * 0.65) * 0.011 + (hash1(i * 11) - 0.5) * 0.008;
+      distOffset = -3.0 + idxInGroup * 1.1;
+    }
+
+    birds.push({
+      id: i,
+      isGroupA,
+      initAzOffset,
+      initElOffset,
+      targetAzOffset,
+      targetElOffset,
+      distOffset,
+      wingSpan: 1.32 + hash1(i * 13) * 0.22,
+      flapFreq: 3.75 + hash1(i * 17) * 0.55, // ~3.8 - 4.3 Hz realistic migratory beat
+      flapPhase: hash1(i * 23) * Math.PI * 2,
+      glidePeriod: 6.5 + hash1(i * 29) * 4.5,
+      glideOffset: hash1(i * 31) * 10.0,
+      wanderPhase: hash1(i * 37) * Math.PI * 2
+    });
+  }
+
+  function smoothstep(e0, e1, x) {
+    const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)));
+    return t * t * (3 - 2 * t);
+  }
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  // Compute flock center trajectory in spherical sky coordinates:
+  // Yaw increases (+leftward), Pitch decreases (descending toward lower cloud deck),
+  // Distance increases from ~94m to ~245m (flying away into distant overcast haze).
+  function getFlockCenter(t) {
+    const u = t / DURATION;
+    const yaw = -0.075 + u * 0.56 + Math.sin(t * 0.22) * 0.012;
+    const pitch = 0.255 - smoothstep(0.0, 1.0, u) * 0.225;
+    const dist = 92.0 + Math.pow(u, 1.12) * 158.0;
+    return { yaw, pitch, dist };
+  }
+
+  // Camera state mimics a person filming on a 4x telephoto smartphone lens:
+  // Starts slightly to the left of the entering flock (0:00), pans left to center them (0:05),
+  // then tracks leftward & tilts downward with subtle organic handheld breathing.
+  function getCameraState(t) {
+    const center = getFlockCenter(t);
+    const u = t / DURATION;
+
+    // At t=0, camera leads/lags so Group A is at x~0.68 and Group B enters at x~0.98
+    const leadYaw = lerp(0.068, -0.016, smoothstep(0.0, 5.8, t)) + lerp(0.0, -0.014, smoothstep(12.0, 19.6, t));
+    const leadPitch = lerp(0.016, 0.008, smoothstep(0.0, 8.0, t)) + lerp(0.0, 0.012, smoothstep(13.0, 19.6, t));
+
+    // Organic handheld micro-sway
+    const swayYaw = Math.sin(t * 0.85 + 0.4) * 0.0032 + Math.sin(t * 1.92) * 0.0011;
+    const swayPitch = Math.cos(t * 0.72 + 1.1) * 0.0028 + Math.sin(t * 1.65 + 2.0) * 0.0010;
+    const swayRoll = Math.sin(t * 0.55 + 0.7) * 0.0045;
+
+    const camYaw = center.yaw + leadYaw + swayYaw;
+    const camPitch = center.pitch + leadPitch + swayPitch;
+
+    return { yaw: camYaw, pitch: camPitch, roll: swayRoll };
+  }
+
+  // Build 3x3 Camera-to-World and World-to-Camera rotation matrices
+  // Convention: yaw=0 looks along -Z, +yaw rotates left (-X? Wait: in cam space +X is right,
+  // so rotating camera left means forward vector turns toward -X).
+  function buildCameraMatrices(yaw, pitch, roll) {
+    const cy = Math.cos(yaw), sy = Math.sin(yaw);
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const cr = Math.cos(roll), sr = Math.sin(roll);
+
+    // Forward vector (looking toward -Z rotated by pitch up & yaw left)
+    const fx = -sy * cp;
+    const fy = sp;
+    const fz = -cy * cp;
+
+    // World up
+    let rx = fz; // cross(f, worldUp(0,1,0)) = (-fz, 0, fx)... wait:
+    // f x up = (fy*0 - fz*1, fz*0 - fx*0, fx*1 - fy*0) = (-fz, 0, fx)
+    rx = -fz;
+    let ry = 0;
+    let rz = fx;
+    const rLen = Math.hypot(rx, ry, rz) || 1;
+    rx /= rLen; rz /= rLen;
+
+    // True up = r x f
+    const ux = ry * fz - rz * fy;
+    const uy = rz * fx - rx * fz;
+    const uz = rx * fy - ry * fx;
+
+    // Apply subtle camera roll around forward axis
+    const rrx = rx * cr + ux * sr;
+    const rry = ry * cr + uy * sr;
+    const rrz = rz * cr + uz * sr;
+
+    const rux = ux * cr - rx * sr;
+    const ruy = uy * cr - ry * sr;
+    const ruz = uz * cr - rz * sr;
+
+    // Column-major mat3 for GLSL: col0 = Right, col1 = Up, col2 = -Forward (since cam ray uses -1.0 Z)
+    const camToWorld = new Float32Array([
+      rrx, rry, rrz,
+      rux, ruy, ruz,
+      -fx, -fy, -fz
+    ]);
+
+    // Inverse (transpose of orthonormal matrix)
+    const worldToCam = new Float32Array([
+      rrx, rux, -fx,
+      rry, ruy, -fy,
+      rrz, ruz, -fz
+    ]);
+
+    return { camToWorld, worldToCam };
+  }
+
+  // Helper to push a 3D triangle into birdVertexData
+  let vertCursor = 0;
+  function pushTri(p1, p2, p3, haze, alpha, soft1 = 1, soft2 = 1, soft3 = 1) {
+    const ux = p2[0] - p1[0], uy = p2[1] - p1[1], uz = p2[2] - p1[2];
+    const vx = p3[0] - p1[0], vy = p3[1] - p1[1], vz = p3[2] - p1[2];
+    let nx = uy * vz - uz * vy;
+    let ny = uz * vx - ux * vz;
+    let nz = ux * vy - uy * vx;
+    const len = Math.hypot(nx, ny, nz) || 1;
+    nx /= len; ny /= len; nz /= len;
+    if (ny < 0) { nx = -nx; ny = -ny; nz = -nz; } // Upper-surface normal for sky lighting
+
+    const pts = [p1, p2, p3];
+    const softs = [soft1, soft2, soft3];
+    for (let k = 0; k < 3; k++) {
+      const p = pts[k];
+      birdVertexData[vertCursor++] = p[0];
+      birdVertexData[vertCursor++] = p[1];
+      birdVertexData[vertCursor++] = p[2];
+      birdVertexData[vertCursor++] = nx;
+      birdVertexData[vertCursor++] = ny;
+      birdVertexData[vertCursor++] = nz;
+      birdVertexData[vertCursor++] = haze;
+      birdVertexData[vertCursor++] = alpha;
+      birdVertexData[vertCursor++] = 0.0;
+      birdVertexData[vertCursor++] = softs[k];
+    }
+  }
+
+  // Build articulated 3D geometry for all 19 birds at time t
+  function updateFlockGeometry(t) {
+    vertCursor = 0;
+    const center = getFlockCenter(t);
+    const dt = 0.05;
+    const centerNext = getFlockCenter(Math.min(DURATION, t + dt));
+
+    // Formation transition: from initial split lines (0:00) into merged undulating V-wave (0:05+)
+    const mergeT = smoothstep(0.4, 6.2, t);
+    // Late formation subtle compression & wander (0:13 - 0:19)
+    const lateCompress = 1.0 - smoothstep(11.0, 19.5, t) * 0.22;
+
+    for (let i = 0; i < birds.length; i++) {
+      const b = birds[i];
+
+      // Smooth organic wandering around slot
+      const wanderAz = Math.sin(t * 0.55 + b.wanderPhase) * 0.0042 +
+                       Math.cos(t * 1.15 + b.id) * 0.0016;
+      const wanderEl = Math.cos(t * 0.68 + b.wanderPhase * 1.3) * 0.0038 +
+                       Math.sin(t * 1.35 + b.id * 2.1) * 0.0014;
+
+      const azOff = lerp(b.initAzOffset, b.targetAzOffset * lateCompress, mergeT) + wanderAz;
+      const elOff = lerp(b.initElOffset, b.targetElOffset, mergeT) + wanderEl;
+
+      const yaw = center.yaw + azOff;
+      const pitch = center.pitch + elOff;
+      const dist = center.dist + b.distOffset + Math.sin(t * 0.4 + b.id) * 1.8;
+
+      // Compute velocity heading for natural banking & orientation
+      const mergeNext = smoothstep(0.4, 6.2, t + dt);
+      const yawNext = centerNext.yaw + lerp(b.initAzOffset, b.targetAzOffset * lateCompress, mergeNext) + wanderAz;
+      const pitchNext = centerNext.pitch + lerp(b.initElOffset, b.targetElOffset, mergeNext) + wanderEl;
+      const distNext = centerNext.dist + b.distOffset;
+
+      const cp = Math.cos(pitch), sp = Math.sin(pitch);
+      const cy = Math.cos(yaw), sy = Math.sin(yaw);
+      const pos = [ -sy * cp * dist, sp * dist, -cy * cp * dist ];
+
+      const cp2 = Math.cos(pitchNext), sp2 = Math.sin(pitchNext);
+      const cy2 = Math.cos(yawNext), sy2 = Math.sin(yawNext);
+      const posNext = [ -sy2 * cp2 * distNext, sp2 * distNext, -cy2 * cp2 * distNext ];
+
+      // Heading basis vectors: Forward (F), Right (R), Up (U)
+      let fx = posNext[0] - pos[0];
+      let fy = posNext[1] - pos[1];
+      let fz = posNext[2] - pos[2];
+      const fLen = Math.hypot(fx, fy, fz) || 1;
+      fx /= fLen; fy /= fLen; fz /= fLen;
+
+      // Right = F x WorldUp
+      let rx = -fz, ry = 0, rz = fx;
+      const rLen = Math.hypot(rx, ry, rz) || 1;
+      rx /= rLen; rz /= rLen;
+
+      // Up = R x F
+      let ux = ry * fz - rz * fy;
+      let uy = rz * fx - rx * fz;
+      let uz = rx * fy - ry * fx;
+
+      // Subtle roll/banking angle (stronger at 0:00-0:02 as Group A turns into alignment)
+      const earlyTurnBank = b.isGroupA ? (1.0 - smoothstep(0.0, 2.5, t)) * 0.35 : -0.12 * (1.0 - smoothstep(0.0, 3.0, t));
+      const bankAngle = earlyTurnBank + Math.sin(t * 0.9 + b.wanderPhase) * 0.14;
+      const cb = Math.cos(bankAngle), sb = Math.sin(bankAngle);
+
+      const brx = rx * cb + ux * sb;
+      const bry = ry * cb + uy * sb;
+      const brz = rz * cb + uz * sb;
+
+      const bux = ux * cb - rx * sb;
+      const buy = uy * cb - ry * sb;
+      const buz = uz * cb - rz * sb;
+
+      // Wing Kinematics: rhythmic flapping interspersed with brief arched glides
+      const glideWave = Math.sin((t + b.glideOffset) * (Math.PI * 2 / b.glidePeriod));
+      const glideMask = 1.0 - smoothstep(0.72, 0.92, glideWave) * 0.88;
+
+      const phase = t * b.flapFreq * Math.PI * 2 + b.flapPhase;
+      const s1 = Math.sin(phase);
+      const c1 = Math.cos(phase);
+
+      // Inner wing (shoulder to wrist) flaps cleanly;
+      // Outer wing (wrist to primary tips) lags in phase & folds slightly on recovery upstroke!
+      const innerAngle = (s1 * 0.62 + 0.08) * glideMask + (1.0 - glideMask) * 0.14;
+      const wristFold = c1 > 0 ? -c1 * 0.42 : c1 * 0.12; // Bends downward during upstroke!
+      const outerAngle = innerAngle + (Math.sin(phase - 0.68) * 0.48 + wristFold) * glideMask - (1.0 - glideMask) * 0.18;
+
+      // Subtle body reaction bob opposite to wing beat
+      const bodyBob = -s1 * 0.06 * b.wingSpan * glideMask;
+      const bx = pos[0] + bux * bodyBob;
+      const by = pos[1] + buy * bodyBob;
+      const bz = pos[2] + buz * bodyBob;
+
+      const span = b.wingSpan;
+      const bodyLen = span * 0.72;
+
+      // Helper to transform local bird coords (forward, right, up) to world space
+      const toWorld = (lf, lr, lu) => [
+        bx + fx * lf + brx * lr + bux * lu,
+        by + fy * lf + bry * lr + buy * lu,
+        bz + fz * lf + brz * lr + buz * lu
+      ];
+
+      // Atmospheric haze & opacity based on distance and elevation into the lower cloud deck
+      const distNorm = smoothstep(75.0, 265.0, dist);
+      const lowCloudImmersion = smoothstep(0.11, 0.01, pitch);
+      const haze = Math.min(0.86, 0.24 + distNorm * 0.44 + lowCloudImmersion * 0.16);
+      const opacity = lerp(0.95, 0.66, smoothstep(155.0, 255.0, dist));
+
+      // --- Fusiform Body + Extended Neck + Tail (6 triangles) ---
+      const headTip   = toWorld( bodyLen * 0.56,  0.0,  0.02 * span);
+      const neckL     = toWorld( bodyLen * 0.16, -0.055 * span, 0.0);
+      const neckR     = toWorld( bodyLen * 0.16,  0.055 * span, 0.0);
+      const chestTop  = toWorld( 0.02 * bodyLen,  0.0,  0.048 * span);
+      const bellyBot  = toWorld(-0.04 * bodyLen,  0.0, -0.045 * span);
+      const hipL      = toWorld(-bodyLen * 0.24, -0.05 * span, 0.0);
+      const hipR      = toWorld(-bodyLen * 0.24,  0.05 * span, 0.0);
+      const tailTip   = toWorld(-bodyLen * 0.48,  0.0,  0.01 * span);
+
+      pushTri(headTip, neckL, chestTop, haze, opacity);
+      pushTri(headTip, chestTop, neckR, haze, opacity);
+      pushTri(neckL, hipL, chestTop, haze, opacity);
+      pushTri(chestTop, hipR, neckR, haze, opacity);
+      pushTri(hipL, tailTip, chestTop, haze, opacity);
+      pushTri(chestTop, tailTip, hipR, haze, opacity);
+      pushTri(neckL, bellyBot, hipL, haze, opacity);
+      pushTri(neckR, hipR, bellyBot, haze, opacity);
+
+      // --- Left & Right Two-Segment Swept Wings (3 triangles each = 6 triangles) ---
+      for (let side = -1; side <= 1; side += 2) {
+        const innerLen = span * 0.24;
+        const outerLen = span * 0.29;
+
+        const wY1 = Math.sin(innerAngle) * innerLen;
+        const wX1 = Math.cos(innerAngle) * innerLen * side;
+
+        const wY2 = wY1 + Math.sin(outerAngle) * outerLen;
+        const wX2 = wX1 + Math.cos(outerAngle) * outerLen * side;
+
+        // Shoulder leading & trailing root points
+        const rootLead  = toWorld( bodyLen * 0.13, side * 0.04 * span, 0.015 * span);
+        const rootTrail = toWorld(-bodyLen * 0.15, side * 0.04 * span, 0.005 * span);
+
+        // Wrist chord (swept slightly forward at wrist like geese/cranes/gulls)
+        const wristLead  = toWorld( bodyLen * 0.15, wX1, wY1);
+        const wristTrail = toWorld(-bodyLen * 0.11, wX1 * 0.96, wY1 - 0.01 * span);
+
+        // Swept tapered primary wingtip
+        const wingTip    = toWorld(-bodyLen * 0.16, wX2, wY2);
+
+        pushTri(rootLead, wristLead, rootTrail, haze, opacity);
+        pushTri(rootTrail, wristLead, wristTrail, haze, opacity);
+        pushTri(wristLead, wingTip, wristTrail, haze, opacity, 1.0, 0.85, 1.0);
+      }
+    }
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, birdBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, birdVertexData.subarray(0, vertCursor), gl.DYNAMIC_DRAW);
+    return vertCursor / FLOATS_PER_VERT;
+  }
+
+  // ============================================================================
+  // 5. RESIZE, CONTROLS & RENDER LOOP
+  // ============================================================================
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.0);
+    const rect = canvas.getBoundingClientRect();
+    const w = Math.max(1, Math.round(rect.width * dpr));
+    const h = Math.max(1, Math.round(rect.height * dpr));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // Playback Controls
+  const playBtn = document.getElementById('playBtn');
+  const iconPause = document.getElementById('iconPause');
+  const iconPlay = document.getElementById('iconPlay');
+  const scrubber = document.getElementById('scrubber');
+  const timeLabel = document.getElementById('timeLabel');
+
+  let playing = true;
+  let simTime = 0.0;
+  let lastNow = performance.now();
+  let isScrubbing = false;
+
+  function formatTime(sec) {
+    const s = Math.min(19, Math.floor(sec));
+    return '00:' + (s < 10 ? '0' + s : s);
+  }
+
+  playBtn.addEventListener('click', () => {
+    playing = !playing;
+    iconPause.style.display = playing ? 'block' : 'none';
+    iconPlay.style.display = playing ? 'none' : 'block';
+  });
+
+  scrubber.addEventListener('input', (e) => {
+    isScrubbing = true;
+    simTime = parseFloat(e.target.value);
+    timeLabel.textContent = formatTime(simTime);
+  });
+
+  scrubber.addEventListener('change', () => {
+    isScrubbing = false;
+  });
+
+  canvas.addEventListener('click', () => {
+    playBtn.click();
+  });
+
+  // Telephoto vertical FOV (~23 degrees) gives authentic compressed cloud perspective
+  const TAN_HALF_FOV = Math.tan((23.0 * Math.PI / 180.0) * 0.5);
+
+  function render(now) {
+    const dt = Math.min(0.05, (now - lastNow) * 0.001);
+    lastNow = now;
+
+    if (playing && !isScrubbing) {
+      simTime += dt;
+      if (simTime >= DURATION) {
+        simTime -= DURATION;
+      }
+      scrubber.value = simTime.toFixed(2);
+      timeLabel.textContent = formatTime(simTime);
+    }
+
+    resize();
+    gl.viewport(0, 0, canvas.width, canvas.height);
+
+    // Subtle 0.35s fade-through-haze right at loop wraparound so there's zero pop
+    let loopFade = 0.0;
+    if (!isScrubbing) {
+      if (simTime > DURATION - 0.35) {
+        loopFade = smoothstep(DURATION - 0.35, DURATION, simTime);
+      } else if (simTime < 0.35) {
+        loopFade = 1.0 - smoothstep(0.0, 0.35, simTime);
+      }
+    }
+
+    const cam = getCameraState(simTime);
+    const { camToWorld, worldToCam } = buildCameraMatrices(cam.yaw, cam.pitch, cam.roll);
+
+    // --- PASS 1: Volumetric Raymarched Sky & Golden-Hour Clouds ---
+    gl.disable(gl.BLEND);
+    gl.useProgram(skyProg);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, noiseTex);
+    gl.uniform1i(skyLoc.uNoise, 0);
+
+    gl.uniform2f(skyLoc.uRes, canvas.width, canvas.height);
+    gl.uniform1f(skyLoc.uTime, simTime);
+    gl.uniformMatrix3fv(skyLoc.uCamMat, false, camToWorld);
+    gl.uniform1f(skyLoc.uTanHalfFov, TAN_HALF_FOV);
+    gl.uniform1f(skyLoc.uLoopFade, loopFade * 0.85);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+    gl.enableVertexAttribArray(skyLoc.aPos);
+    gl.vertexAttribPointer(skyLoc.aPos, 2, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    gl.disableVertexAttribArray(skyLoc.aPos);
+
+    // --- PASS 2: 3D Articulated Kinematic Flock with Aerial Perspective ---
+    const vertCount = updateFlockGeometry(simTime);
+
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(birdProg);
+
+    gl.uniformMatrix3fv(birdLoc.uCamInv, false, worldToCam);
+    gl.uniform1f(birdLoc.uTanHalfFov, TAN_HALF_FOV);
+    gl.uniform2f(birdLoc.uRes, canvas.width, canvas.height);
+    gl.uniform1f(birdLoc.uLoopFade, loopFade);
+
+    const stride = FLOATS_PER_VERT * 4;
+    gl.bindBuffer(gl.ARRAY_BUFFER, birdBuf);
+
+    gl.enableVertexAttribArray(birdLoc.aPosition);
+    gl.vertexAttribPointer(birdLoc.aPosition, 3, gl.FLOAT, false, stride, 0);
+
+    gl.enableVertexAttribArray(birdLoc.aNormal);
+    gl.vertexAttribPointer(birdLoc.aNormal, 3, gl.FLOAT, false, stride, 12);
+
+    gl.enableVertexAttribArray(birdLoc.aMeta);
+    gl.vertexAttribPointer(birdLoc.aMeta, 4, gl.FLOAT, false, stride, 24);
+
+    gl.drawArrays(gl.TRIANGLES, 0, vertCount);
+
+    gl.disableVertexAttribArray(birdLoc.aPosition);
+    gl.disableVertexAttribArray(birdLoc.aNormal);
+    gl.disableVertexAttribArray(birdLoc.aMeta);
+
+    requestAnimationFrame(render);
+  }
+
+  requestAnimationFrame(render);
+})();
+</script>
+</body>
+</html>

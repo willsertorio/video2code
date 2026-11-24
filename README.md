@@ -6,7 +6,9 @@ A video rebuilt as code.
 
 ## Side-by-side player
 
-`player.html` shows the original clip next to the code version, locked to the same frame. It is also a single self-contained file and embeds a 720 x 1280 copy of the source clip for the comparison.
+`player.html` shows three panels locked to the same frame: the original clip, Gemini 4 Carbon's version, and the human-made code version. It is a single self-contained file and embeds a 720 x 1280 copy of the source clip for the comparison.
+
+The middle panel is `carbon.html`, the answer `google/gemini-4-carbon` (through OpenRouter) gave when sent the 720 x 1280 clip with the prompt "transform this video into code, be the more realistic as you can". The player hides Carbon's own play bar and drives its clock; its drawing code is unchanged. Carbon's animation runs 19.6 s, so it holds its last frame for the clip's final few frames.
 
 - Play or pause: the button, or Space.
 - Step one frame: the -1 and +1 buttons, or the Left and Right arrow keys.
